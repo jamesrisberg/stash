@@ -1,0 +1,24 @@
+# CI for a MacHUD app repo, from hudkit/scripts/hud-ci.yml. Package.swift depends on
+# ../hudkit and, for Stash, on ../sift (FileKit), so both are checked out next to the app.
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ${{ github.event.repository.name }}
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/hudkit
+          path: hudkit
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/sift
+          path: sift
+      - run: swift --version
+      - run: swift test
+        working-directory: ${{ github.event.repository.name }}

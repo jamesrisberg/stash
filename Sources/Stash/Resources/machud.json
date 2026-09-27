@@ -1,0 +1,19 @@
+{
+  "id": "xyz.machud.stash",
+  "name": "Stash",
+  "socket": "stash",
+  "panels": [
+    {
+      "id": "history",
+      "title": "Stash",
+      "symbol": "list.clipboard",
+      "defaultSize": [460, 560],
+      "compactSize": [640, 104],
+      "capabilities": ["providesDrag"],
+      "verbs": ["show", "hide", "toggle", "frame", "mode", "paste"],
+      "settingsSchema": "settings.json",
+      "kind": "hover",
+      "order": 2
+    }
+  ]
+}

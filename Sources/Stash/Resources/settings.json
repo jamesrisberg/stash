@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "key": "historyCap",
+      "title": "History size",
+      "type": "int",
+      "default": 200,
+      "help": "Unpinned clips kept (10-5000). Pinned clips never count and are never dropped."
+    },
+    {
+      "key": "pollIntervalMs",
+      "title": "Clipboard check interval (ms)",
+      "type": "int",
+      "default": 250,
+      "help": "How often the pasteboard is checked (50-5000)."
+    },
+    {
+      "key": "ignoreList",
+      "title": "Never record copies from",
+      "type": "string",
+      "default": "com.1password.1password,com.agilebits.onepassword7,com.bitwarden.desktop,com.lastpass.LastPass,com.dashlane.dashlanephonefinal,org.keepassxc.keepassxc,in.sinew.Enpass-Desktop,com.apple.keychainaccess,com.apple.Passwords",
+      "help": "Comma-separated app bundle ids. Password managers are listed by default."
+    },
+    {
+      "key": "pasteOnEnter",
+      "title": "Enter pastes into the previous app",
+      "type": "bool",
+      "default": true,
+      "help": "Needs Accessibility. Off, Enter only copies."
+    }
+  ]
+}

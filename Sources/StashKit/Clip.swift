@@ -34,10 +34,18 @@ public struct Clip: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var contentHash: String
     /// Pixel size for images.
     public var imageSize: CGSizeCodable?
+    /// Set instead of `sourceBundleID` for an item that arrived through the `text-feed`
+    /// capability (`feed add`) rather than the pasteboard: a short label such as "Dictation" or
+    /// "Agent". Nil for an ordinary clipboard clip. Missing on clips written before this field
+    /// existed, which decode it as nil.
+    public var feedSource: String?
+    /// Optional title a feed sender attached, shown instead of the text-derived `title` when set.
+    public var feedTitle: String?
 
     public init(id: UUID = UUID(), kind: Kind, text: String? = nil, fileURLs: [URL]? = nil, blob: String? = nil,
                 sourceBundleID: String? = nil, date: Date = Date(), pinned: Bool = false, size: Int,
-                contentHash: String, imageSize: CGSizeCodable? = nil) {
+                contentHash: String, imageSize: CGSizeCodable? = nil, feedSource: String? = nil,
+                feedTitle: String? = nil) {
         self.id = id
         self.kind = kind
         self.text = text
@@ -49,10 +57,17 @@ public struct Clip: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.size = size
         self.contentHash = contentHash
         self.imageSize = imageSize
+        self.feedSource = feedSource
+        self.feedTitle = feedTitle
     }
 
-    /// One-line summary for lists and `action search`.
+    /// Whether this is a `text-feed` item rather than a clipboard clip.
+    public var isFeedItem: Bool { feedSource != nil }
+
+    /// One-line summary for lists and `action search`: a feed sender's own `title` when given,
+    /// else the usual text-derived summary.
     public var title: String {
+        if let feedTitle, !feedTitle.isEmpty { return feedTitle }
         switch kind {
         case .image:
             if let s = imageSize { return "Image \(Int(s.width))×\(Int(s.height))" }

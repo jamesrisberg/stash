@@ -14,7 +14,7 @@ final class ControlHost: HUDPanelHost {
     static let builtinManifest = HUDManifest(id: AppModel.bundleID, name: "Stash", socket: "stash", panels: [
         HUDManifest.Panel(id: panelID, title: "Stash", symbol: "list.clipboard",
                           defaultSize: HUDSize(PanelController.fullSize), compactSize: HUDSize(PanelController.compactSize),
-                          capabilities: ["providesDrag"],
+                          capabilities: ["providesDrag", "text-feed"],
                           verbs: ["show", "hide", "toggle", "frame", "mode", "paste"],
                           settingsSchema: "settings.json", kind: .hover, order: 2),
     ])
@@ -43,9 +43,36 @@ final class ControlHost: HUDPanelHost {
 
     func start() {
         router.install()
+        // The `text-feed` capability's own verb (registered on the server directly, like
+        // `agent-sessions`' `sessions`, not through `action`, so MacHUD's broker can address
+        // every provider the same way).
+        server.register("feed") { [weak self] args, done in
+            guard let self else { done(["ok": false, "error": "host gone"]); return }
+            self.handleFeed(args, done: done)
+        }
         if !server.start() { NSLog("Stash: control socket failed to start at %@", server.path) }
         panel.onStateChange = { [weak self] in self?.publishIfChanged() }
         model.onClipsChange = { [weak self] in self?.clipsChangedThrottled() }
+    }
+
+    /// `feed {action:"add", text, source, title?, date?}` -> `{ok, id}`. `date` is ISO 8601;
+    /// missing or unparseable falls back to now. An ignored source is accepted but not recorded
+    /// (`id` comes back empty), matching how an ignored app's clipboard copies are dropped.
+    /// Internal (not `private`) so tests can call it directly instead of round-tripping a socket.
+    func handleFeed(_ args: [String: String], done: @escaping ([String: Any]) -> Void) {
+        let action = args["action"] ?? args["_"] ?? "add"
+        guard action == "add" else {
+            done(["ok": false, "error": "feed action must be add"])
+            return
+        }
+        guard let text = args["text"], !text.isEmpty else { done(["ok": false, "error": "text= required"]); return }
+        guard let source = args["source"], !source.isEmpty else { done(["ok": false, "error": "source= required"]); return }
+        let date = args["date"].flatMap { ISO8601DateFormatter().date(from: $0) } ?? Date()
+        guard let clip = model.receiveFeedItem(text: text, source: source, title: args["title"], date: date) else {
+            done(["ok": true, "id": ""])
+            return
+        }
+        done(["ok": true, "id": clip.id.uuidString])
     }
 
     /// History changes (the badge) go out rate-limited.
@@ -206,7 +233,12 @@ final class ControlHost: HUDPanelHost {
             "pinned": clip.pinned, "size": clip.size,
             "date": ISO8601DateFormatter().string(from: clip.date),
         ]
-        if let source = clip.sourceBundleID { d["source"] = source }
+        if let feedSource = clip.feedSource {
+            d["source"] = feedSource
+            d["feed"] = true
+        } else if let source = clip.sourceBundleID {
+            d["source"] = source
+        }
         if let urls = clip.fileURLs { d["paths"] = urls.map { $0.path(percentEncoded: false) } }
         return d
     }

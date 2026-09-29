@@ -94,6 +94,41 @@ final class ClipStoreTests: PasteboardTestCase {
         XCTAssertThrowsError(try ClipStore(directory: root).load())
     }
 
+    func testFeedItemsAreTaggedAndBypassNoPasteboardLogicOfTheirOwn() throws {
+        let store = ClipStore(directory: root)
+        let clip = try store.add(.text("call the vet back"), feedSource: "Dictation", date: date(1)).clip
+        XCTAssertTrue(clip.isFeedItem)
+        XCTAssertEqual(clip.feedSource, "Dictation")
+        XCTAssertNil(clip.sourceBundleID, "a feed item is not attributed to a copying app")
+        XCTAssertEqual(clip.title, "call the vet back", "falls back to the text when no feedTitle is given")
+
+        let titled = try store.add(.text("second"), feedSource: "Agent", feedTitle: "Reply", date: date(2)).clip
+        XCTAssertEqual(titled.title, "Reply", "a feed sender's own title wins over the text-derived one")
+
+        // Same cap, same search, same persistence as an ordinary clip.
+        XCTAssertEqual(store.search("vet").map(\.id), [clip.id])
+        let reloaded = ClipStore(directory: root)
+        try reloaded.load()
+        XCTAssertEqual(reloaded.clip(id: clip.id)?.feedSource, "Dictation")
+        XCTAssertEqual(reloaded.clip(id: titled.id)?.feedTitle, "Reply")
+    }
+
+    func testFeedItemFieldsDefaultToNilForClipsWithoutThem() throws {
+        // A history.json written before `feedSource`/`feedTitle` existed decodes them as nil.
+        let json = """
+        {"version": 1, "clips": [{"id": "\(UUID().uuidString)", "kind": "text", "text": "old clip",
+          "date": "2026-01-01T00:00:00Z", "pinned": false, "size": 8, "contentHash": "x"}]}
+        """
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: root.appending(path: "history.json"))
+        let store = ClipStore(directory: root)
+        try store.load()
+        let clip = try XCTUnwrap(store.clips.first)
+        XCTAssertNil(clip.feedSource)
+        XCTAssertNil(clip.feedTitle)
+        XCTAssertFalse(clip.isFeedItem)
+    }
+
     func testTitles() throws {
         let store = ClipStore(directory: root)
         XCTAssertEqual(try store.add(.text("  line one\nline two")).clip.title, "line one")

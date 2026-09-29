@@ -28,6 +28,13 @@
       "type": "bool",
       "default": true,
       "help": "Needs Accessibility. Off, Enter only copies."
+    },
+    {
+      "key": "ignoredFeedSources",
+      "title": "Hide feed sources",
+      "type": "string",
+      "default": "",
+      "help": "Comma-separated text-feed sources to ignore (e.g. Dictation). Shown by default."
     }
   ]
 }

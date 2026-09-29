@@ -76,6 +76,18 @@ struct ClipThumbnail: View {
     }
 }
 
+extension Clip {
+    /// SF Symbol for a feed item's small source label (nil for an ordinary clipboard clip).
+    var feedSymbol: String? {
+        guard let feedSource else { return nil }
+        switch feedSource {
+        case "Dictation": return "mic.fill"
+        case "Agent": return "sparkles"
+        default: return "arrow.down.circle.fill"
+        }
+    }
+}
+
 enum ClipFormat {
     static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()

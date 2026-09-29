@@ -197,7 +197,11 @@ struct ClipRow: View {
                     .foregroundStyle(.primary)
                 HStack(spacing: 5) {
                     Text(clip.kind.label).foregroundStyle(clip.kind.tint)
-                    if let app = model.appName(clip.sourceBundleID) { Text("· \(app)") }
+                    if let feedSource = clip.feedSource {
+                        Text("· ") + Text(Image(systemName: clip.feedSymbol ?? "arrow.down.circle.fill")) + Text(" \(feedSource)")
+                    } else if let app = model.appName(clip.sourceBundleID) {
+                        Text("· \(app)")
+                    }
                     Text("· \(ClipFormat.age(clip.date))")
                     if clip.kind != .text && clip.kind != .url && clip.size > 0 { Text("· \(ClipFormat.size(clip.size))") }
                 }

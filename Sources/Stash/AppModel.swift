@@ -145,6 +145,24 @@ final class AppModel: ObservableObject {
         return store.clips.first
     }
 
+    /// `feed add`: records an item from a `text-feed` sender (e.g. a finished dictation
+    /// transcript) directly into history. Never touches the pasteboard — the HUDKit contract
+    /// requires a provider not to treat this as a clipboard event — so the watcher never sees it
+    /// and it cannot loop back as a duplicate copy. `source` on `ignoredFeedSources` is silently
+    /// dropped, like an ignored app's clipboard copies.
+    @discardableResult
+    func receiveFeedItem(text: String, source: String, title: String?, date: Date) -> Clip? {
+        guard !settings.ignoredFeedSources.contains(source) else { return nil }
+        do {
+            let result = try store.add(.text(text), feedSource: source, feedTitle: title, date: date)
+            if result.isNew { selectFirst(); onNewClip?() }
+            return result.clip
+        } catch {
+            NSLog("Stash: could not record feed item: %@", error.localizedDescription)
+            return nil
+        }
+    }
+
     // MARK: - Clip actions
 
     /// Puts the clip on the pasteboard and moves it to the top (Enter, ⌘C, paste).

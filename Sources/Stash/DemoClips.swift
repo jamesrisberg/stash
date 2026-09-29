@@ -12,6 +12,9 @@ enum DemoClips {
             guard let clip = try? store.add(payload, source: source, date: now - minutesAgo * 60).clip else { return }
             if pin { store.setPinned(true, id: clip.id) }
         }
+        func addFeed(_ text: String, source: String, minutesAgo: Double) {
+            _ = try? store.add(.text(text), feedSource: source, date: now - minutesAgo * 60)
+        }
         // Oldest first so the newest ends on top.
         add(.text("james.risberg@example.com"), "com.apple.mail", minutesAgo: 2900, pin: true)
         add(.text("ssh -L 8080:localhost:80 deploy@staging.internal"), "com.mitchellh.ghostty", minutesAgo: 1500, pin: true)
@@ -32,6 +35,7 @@ enum DemoClips {
         add(ClipPayload(kind: .image, blobData: png, blobExtension: "png", imageSize: CGSizeCodable(width: 640, height: 400)),
             "com.apple.Preview", minutesAgo: 4)
         add(.text("func paste(_ clip: Clip) {\n    model.copy(clip)\n    Paster.postCommandV()\n}"), "com.apple.dt.Xcode", minutesAgo: 0.2)
+        addFeed("Remind me to send the invoice before Friday.", source: "Dictation", minutesAgo: 0.1)
         model.selectFirst()
     }
 

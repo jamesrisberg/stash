@@ -10,16 +10,20 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(s.pasteOnEnter)
         XCTAssertTrue(s.ignoreList.contains("com.1password.1password"))
         XCTAssertTrue(s.ignoreList.contains("com.bitwarden.desktop"))
+        XCTAssertEqual(s.ignoredFeedSources, [], "every text-feed source shows by default")
     }
 
     func testApplyingValidatesEverythingFirst() throws {
         let s = StashSettings()
-        let t = try s.applying(["historyCap": "50", "pollIntervalMs": "500", "ignoreList": "a.b, c.d ,", "pasteOnEnter": "off"])
+        let t = try s.applying(["historyCap": "50", "pollIntervalMs": "500", "ignoreList": "a.b, c.d ,", "pasteOnEnter": "off",
+                                "ignoredFeedSources": "Dictation, Agent ,"])
         XCTAssertEqual(t.historyCap, 50)
         XCTAssertEqual(t.pollInterval, 0.5)
         XCTAssertEqual(t.ignoreList, ["a.b", "c.d"])
         XCTAssertFalse(t.pasteOnEnter)
+        XCTAssertEqual(t.ignoredFeedSources, ["Dictation", "Agent"])
         XCTAssertEqual(t.json["ignoreList"] as? String, "a.b,c.d")
+        XCTAssertEqual(t.json["ignoredFeedSources"] as? String, "Dictation,Agent")
         XCTAssertThrowsError(try s.applying(["historyCap": "3"]))
         XCTAssertThrowsError(try s.applying(["pollIntervalMs": "0.25"]))
         XCTAssertThrowsError(try s.applying(["pasteOnEnter": "maybe"]))

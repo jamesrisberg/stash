@@ -13,8 +13,8 @@ This page lists what Stash adds.
 
 - Manifest: `Sources/Stash/Resources/machud.json`: app `xyz.machud.stash`, socket `stash`, one
   panel `history` (`kind: hover`, `order: 2`, symbol `list.clipboard`, default 460x560, compact
-  640x104, capability `providesDrag`, verbs `show hide toggle frame mode paste`, settings schema
-  `settings.json`).
+  640x104, capabilities `providesDrag` and `text-feed`, verbs `show hide toggle frame mode paste`,
+  settings schema `settings.json`).
 - Hover: `panel show from=<edge> anchor=x,y,w,h` slides the panel out of the dock (to the
   `panel frame` MacHUD assigned, else next to the anchor); `panel hide to=<edge>` slides it back
   in 0.1 s. `reason=hover` fades in over 0.08 s and never takes focus; other shows focus the
@@ -48,12 +48,13 @@ This page lists what Stash adds.
 | `action delete` | `index=` | removes the clip (and its blob) |
 | `action clear` | `all=1` (optional) | removes unpinned clips, or everything with `all=1` |
 | `action show` / `hide` / `toggle` | | same as the panel verbs |
+| `feed` | `action=add text= source= title=?` `date=?` (ISO 8601) | HUDKit's `text-feed` capability (registered directly, like `sessions` for `agent-sessions`): records `text` as a history item tagged with `source` (a short label such as `Dictation`, shown with a small icon instead of an app name) rather than a pasteboard copy — the pasteboard is never touched, so the clipboard watcher never sees it. Searchable, pasteable, subject to the same cap as any clip. A `source` on `ignoredFeedSources` is accepted but not recorded (`id` comes back empty). Returns `{ok, id}` |
 | `quit` | | replies, then quits (the socket file is removed) |
 | `help` | | lists the registered commands |
 
-Each result is `{index, id, kind, title, pinned, size, date, source?, paths?}`. `kind` is
-`text`, `richText`, `image`, `files` or `url`, and `source` is the bundle id of the app that
-was frontmost when the clip was copied.
+Each result is `{index, id, kind, title, pinned, size, date, source?, feed?, paths?}`. `kind` is
+`text`, `richText`, `image`, `files` or `url`. `source` is the bundle id of the app that was
+frontmost when the clip was copied, or (with `feed: true`) the `text-feed` sender's label.
 
 ## Settings
 
@@ -63,6 +64,7 @@ was frontmost when the clip was copied.
 | `pollIntervalMs` | int (50-5000) | `250` |
 | `ignoreList` | string (comma-separated bundle ids) | password managers and Keychain Access |
 | `pasteOnEnter` | bool | `true` |
+| `ignoredFeedSources` | string (comma-separated `text-feed` source labels) | `""` (shows every source) |
 
 Described by `Sources/Stash/Resources/settings.json` in HUDKit's `HUDSettingsSchema` format
 (`{"version": 1, "settings": [{"key", "title", "type", "default"?, "help"?}]}`). Stored in
@@ -113,6 +115,7 @@ stash search pipe
 stash paste 1
 stash panel mode id=history compact
 stash settings set historyCap=500 pasteOnEnter=false
+stash feed action=add text="remind me to call back" source=Dictation
 stash watch
 stash quit
 ```

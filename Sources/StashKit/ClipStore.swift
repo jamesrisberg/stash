@@ -79,8 +79,11 @@ public final class ClipStore {
 
     // MARK: - Changes
 
+    /// `feedSource`/`feedTitle` come from the `text-feed` capability (`feed add`); `source` is
+    /// the copying app's bundle id and is unused for a feed item.
     @discardableResult
-    public func add(_ payload: ClipPayload, source: String? = nil, date: Date = Date()) throws -> AddResult {
+    public func add(_ payload: ClipPayload, source: String? = nil, feedSource: String? = nil,
+                     feedTitle: String? = nil, date: Date = Date()) throws -> AddResult {
         let hash = payload.contentHash
         if let newest = clips.first, newest.contentHash == hash {
             return .duplicate(newest)
@@ -95,7 +98,7 @@ public final class ClipStore {
         }
         let clip = Clip(id: id, kind: payload.kind, text: payload.text, fileURLs: payload.fileURLs, blob: blob,
                         sourceBundleID: source, date: date, size: payload.size, contentHash: hash,
-                        imageSize: payload.imageSize)
+                        imageSize: payload.imageSize, feedSource: feedSource, feedTitle: feedTitle)
         clips.insert(clip, at: 0)
         enforceCap()
         changed()

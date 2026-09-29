@@ -6,6 +6,13 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- HUDKit's `text-feed` capability: other apps (e.g. dictation) can add an item straight to
+  the history without it passing through the pasteboard. Feed items are tagged with their
+  source (a small icon and label, such as a mic for Dictation) instead of an app name, and
+  are searchable, pasteable and capped like any clip. A new `ignoredFeedSources` setting
+  hides feed items from sources you list there.
+
 ## [0.1.0] - 2026-09-27
 
 First release: a clipboard history for macOS 14+ in the MacHUD family, built on HUDKit.

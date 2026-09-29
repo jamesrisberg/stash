@@ -11,6 +11,9 @@ public struct StashSettings: Codable, Equatable, Sendable {
     public var ignoreList: [String] = StashSettings.defaultIgnoreList
     /// Enter pastes into the previous app (needs Accessibility); off, Enter only copies.
     public var pasteOnEnter: Bool = true
+    /// `text-feed` sources (e.g. "Dictation") whose items `feed add` does not record. Empty
+    /// (the default) shows every source.
+    public var ignoredFeedSources: [String] = []
 
     public init() {}
 
@@ -39,6 +42,7 @@ public struct StashSettings: Codable, Equatable, Sendable {
         pollIntervalMs = (try? c.decodeIfPresent(Int.self, forKey: .pollIntervalMs)) ?? d.pollIntervalMs
         ignoreList = (try? c.decodeIfPresent([String].self, forKey: .ignoreList)) ?? d.ignoreList
         pasteOnEnter = (try? c.decodeIfPresent(Bool.self, forKey: .pasteOnEnter)) ?? d.pasteOnEnter
+        ignoredFeedSources = (try? c.decodeIfPresent([String].self, forKey: .ignoredFeedSources)) ?? d.ignoredFeedSources
     }
 
     public enum SettingsError: Error, CustomStringConvertible, Equatable {
@@ -51,7 +55,7 @@ public struct StashSettings: Codable, Equatable, Sendable {
     /// The `settings get` form, matching the schema's types (`ignoreList` is a comma-separated string).
     public var json: [String: Any] {
         ["historyCap": historyCap, "pollIntervalMs": pollIntervalMs, "ignoreList": ignoreList.joined(separator: ","),
-         "pasteOnEnter": pasteOnEnter]
+         "pasteOnEnter": pasteOnEnter, "ignoredFeedSources": ignoredFeedSources.joined(separator: ",")]
     }
 
     /// Returns a copy with string values from `settings set` applied. Validates every value
@@ -72,6 +76,8 @@ public struct StashSettings: Codable, Equatable, Sendable {
                 s.pollIntervalMs = n
             case "ignoreList":
                 s.ignoreList = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            case "ignoredFeedSources":
+                s.ignoredFeedSources = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             case "pasteOnEnter":
                 switch value.lowercased() {
                 case "1", "true", "yes", "on": s.pasteOnEnter = true

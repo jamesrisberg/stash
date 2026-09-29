@@ -9,7 +9,7 @@
       "symbol": "list.clipboard",
       "defaultSize": [460, 560],
       "compactSize": [640, 104],
-      "capabilities": ["providesDrag"],
+      "capabilities": ["providesDrag", "text-feed"],
       "verbs": ["show", "hide", "toggle", "frame", "mode", "paste"],
       "settingsSchema": "settings.json",
       "kind": "hover",

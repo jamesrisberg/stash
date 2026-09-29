@@ -19,7 +19,7 @@ final class ManifestTests: XCTestCase {
         XCTAssertEqual(panel.kind, .hover, "MacHUD shows Stash while the pointer is over its orb")
         XCTAssertEqual(panel.order, 2, "MacHUD dock: Scratch 1, Stash 2")
         for verb in ["show", "hide", "toggle", "frame", "mode", "paste"] { XCTAssertTrue(panel.verbs.contains(verb), verb) }
-        XCTAssertTrue(panel.capabilities.contains("text-feed"))
+        XCTAssertTrue(panel.capabilities.contains(HUDTextFeed.capability))
         let schema = try XCTUnwrap(panel.settingsSchema)
         let settings = try JSONSerialization.jsonObject(with: Data(contentsOf: resources.appending(path: schema))) as? [String: Any]
         let keys = (settings?["settings"] as? [[String: Any]])?.compactMap { $0["key"] as? String }

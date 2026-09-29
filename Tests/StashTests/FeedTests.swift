@@ -1,4 +1,5 @@
 import AppKit
+import HUDKit
 import StashKit
 @testable import Stash
 import XCTest
@@ -53,7 +54,7 @@ final class FeedTests: XCTestCase {
     // MARK: - The `feed` socket verb
 
     func testFeedAddRecordsAndRepliesWithAnID() {
-        let reply = feed(["action": "add", "text": "remind me to call back", "source": "Dictation"])
+        let reply = feed(HUDTextFeed.addArgs(text: "remind me to call back", source: "Dictation"))
         XCTAssertEqual(reply["ok"] as? Bool, true)
         let id = try? XCTUnwrap(reply["id"] as? String)
         XCTAssertNotNil(id)
@@ -72,7 +73,7 @@ final class FeedTests: XCTestCase {
     }
 
     func testFeedAddWithTitleSetsTheDisplayedTitle() {
-        let reply = feed(["action": "add", "text": "the body", "source": "Agent", "title": "Reply to James"])
+        let reply = feed(HUDTextFeed.addArgs(text: "the body", source: "Agent", title: "Reply to James"))
         XCTAssertEqual(reply["ok"] as? Bool, true)
         XCTAssertEqual(model.clips.first?.title, "Reply to James")
         XCTAssertEqual(model.clips.first?.text, "the body")
@@ -85,21 +86,23 @@ final class FeedTests: XCTestCase {
     }
 
     func testFeedRejectsAnUnknownAction() {
-        let reply = feed(["action": "remove", "text": "hi", "source": "Dictation"])
+        var args = HUDTextFeed.addArgs(text: "hi", source: "Dictation")
+        args["action"] = "remove"
+        let reply = feed(args)
         XCTAssertEqual(reply["ok"] as? Bool, false)
         XCTAssertTrue(model.clips.isEmpty)
     }
 
     func testFeedAddOnAnIgnoredSourceRepliesOkWithNoID() throws {
         try model.updateSettings(try model.settings.applying(["ignoredFeedSources": "Dictation"]))
-        let reply = feed(["action": "add", "text": "hi", "source": "Dictation"])
+        let reply = feed(HUDTextFeed.addArgs(text: "hi", source: "Dictation"))
         XCTAssertEqual(reply["ok"] as? Bool, true)
         XCTAssertEqual(reply["id"] as? String, "")
         XCTAssertTrue(model.clips.isEmpty)
     }
 
     func testFeedAddParsesAnExplicitDate() throws {
-        let reply = feed(["action": "add", "text": "hi", "source": "Dictation", "date": "2026-01-02T03:04:05Z"])
+        let reply = feed(HUDTextFeed.addArgs(text: "hi", source: "Dictation", date: "2026-01-02T03:04:05Z"))
         XCTAssertEqual(reply["ok"] as? Bool, true)
         let expected = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-01-02T03:04:05Z"))
         XCTAssertEqual(model.clips.first?.date, expected)
@@ -108,7 +111,7 @@ final class FeedTests: XCTestCase {
     // MARK: - Manifest and describe()
 
     func testManifestDeclaresTheCapability() {
-        XCTAssertTrue(ControlHost.builtinManifest.panel(id: ControlHost.panelID)?.capabilities.contains("text-feed") == true)
+        XCTAssertTrue(ControlHost.builtinManifest.panel(id: ControlHost.panelID)?.capabilities.contains(HUDTextFeed.capability) == true)
     }
 
     func testListDescribesAFeedItemWithItsSourceAndAFeedFlag() {

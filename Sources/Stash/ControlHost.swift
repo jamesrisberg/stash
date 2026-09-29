@@ -14,7 +14,7 @@ final class ControlHost: HUDPanelHost {
     static let builtinManifest = HUDManifest(id: AppModel.bundleID, name: "Stash", socket: "stash", panels: [
         HUDManifest.Panel(id: panelID, title: "Stash", symbol: "list.clipboard",
                           defaultSize: HUDSize(PanelController.fullSize), compactSize: HUDSize(PanelController.compactSize),
-                          capabilities: ["providesDrag", "text-feed"],
+                          capabilities: ["providesDrag", HUDTextFeed.capability],
                           verbs: ["show", "hide", "toggle", "frame", "mode", "paste"],
                           settingsSchema: "settings.json", kind: .hover, order: 2),
     ])
@@ -46,7 +46,7 @@ final class ControlHost: HUDPanelHost {
         // The `text-feed` capability's own verb (registered on the server directly, like
         // `agent-sessions`' `sessions`, not through `action`, so MacHUD's broker can address
         // every provider the same way).
-        server.register("feed") { [weak self] args, done in
+        server.register(HUDTextFeed.command) { [weak self] args, done in
             guard let self else { done(["ok": false, "error": "host gone"]); return }
             self.handleFeed(args, done: done)
         }
@@ -60,9 +60,9 @@ final class ControlHost: HUDPanelHost {
     /// (`id` comes back empty), matching how an ignored app's clipboard copies are dropped.
     /// Internal (not `private`) so tests can call it directly instead of round-tripping a socket.
     func handleFeed(_ args: [String: String], done: @escaping ([String: Any]) -> Void) {
-        let action = args["action"] ?? args["_"] ?? "add"
-        guard action == "add" else {
-            done(["ok": false, "error": "feed action must be add"])
+        let action = args["action"] ?? args["_"] ?? HUDTextFeed.addAction
+        guard action == HUDTextFeed.addAction else {
+            done(["ok": false, "error": "feed action must be \(HUDTextFeed.addAction)"])
             return
         }
         guard let text = args["text"], !text.isEmpty else { done(["ok": false, "error": "text= required"]); return }

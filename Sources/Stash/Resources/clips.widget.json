@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "key": "pinnedOnly",
+      "title": "Pinned clips only",
+      "type": "bool",
+      "default": false,
+      "help": "Show only pinned clips, newest first."
+    }
+  ]
+}

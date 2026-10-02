@@ -69,7 +69,7 @@ struct ClipCard: View {
                     Text(clip.title).font(.system(size: 10)).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                 }
             } else {
-                Text(snippet(clip))
+                Text(clip.snippet(limit: 120))
                     .font(.system(size: 11))
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -89,11 +89,5 @@ struct ClipCard: View {
         .onDrag { ClipDrag.provider(for: clip, model: model) }
         .contextMenu { ClipMenu(model: model, clip: clip) }
         .help("\(clip.title)\nClick to copy · double-click to paste · ⌘-click to pin")
-    }
-
-    private func snippet(_ clip: Clip) -> String {
-        let lines = (clip.text ?? "").split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        return String(lines.joined(separator: " ").prefix(120))
     }
 }

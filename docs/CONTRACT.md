@@ -118,7 +118,7 @@ never touches the user's defaults, and keeps panel frames only when it has its o
 
 | Flag | Effect |
 |---|---|
-| `--snapshot <path.png>` | show the panel and write a PNG of it after 2.5 s |
+| `--snapshot <path.png>` | show the panel and write a PNG of it after 2.5 s; with `--snapshot-widgets`, a snapshot run serves no control socket, announces nothing, does not watch the clipboard, registers no hotkey and adds no menu bar item, so it never touches a running instance |
 | `--snapshot-quit` | quit after writing the snapshot |
 | `--snapshot-mode compact` | picture the compact strip |
 | `--snapshot-query <q>` | picture a search |

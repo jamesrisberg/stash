@@ -6,6 +6,8 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-02
+
 ### Added
 - A desktop widget, Latest Clips, for MacHUD: small shows your newest clip, medium the newest
   three. Click a clip to copy it back onto the clipboard. Place it more than once, and set

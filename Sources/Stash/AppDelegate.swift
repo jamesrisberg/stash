@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var panel: PanelController!
     private var statusItem: NSStatusItem!
     private var control: ControlHost!
+    private var widgets: HUDWidgetHost!
     static let hotKey = HUDHotKey(key: "v", modifiers: ["control", "option"])
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -40,6 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         control = ControlHost(model: model, panel: panel) { [weak self] clip, _ in
             self?.pasteToFrontmost(clip) ?? ["ok": false, "error": "app gone"]
         }
+        // Desktop widgets: set before the socket starts, MacHUD syncs its instances on connect.
+        widgets = ClipsWidget.makeHost(model: model, manifest: control.manifest)
+        control.router.widgetHost = widgets
         control.start()
         model.start()
         setupStatusItem()
@@ -58,6 +62,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if firstLaunch, !AppEnvironment.isIsolated { UserDefaults.standard.set(true, forKey: "StashLaunchedBefore") }
         if firstLaunch || args.contains("--show") || value("--snapshot") != nil { panel.show() }
 
+        // `--snapshot-widgets <dir>`: PNGs of the clips widget at each size, all clips and
+        // pinned only (clips-small.png, clips-medium-pinned.png, ...). Use with `--demo`.
+        if let dir = value("--snapshot-widgets") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.writeWidgetSnapshots(to: URL(filePath: dir))
+                if args.contains("--snapshot-quit") { NSApp.terminate(nil) }
+            }
+        }
+
         // `--snapshot <path.png>`: write a PNG of the panel after it settles (for docs and for
         // checking the UI without Screen Recording permission). `--snapshot-mode compact`
         // pictures the strip; `--snapshot-query <q>` a search; `--snapshot-hover <n>` a hovered clip.
@@ -71,6 +84,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
                 self?.panel.writeSnapshot(to: URL(filePath: path))
                 if args.contains("--snapshot-quit") { NSApp.terminate(nil) }
+            }
+        }
+    }
+
+    private func writeWidgetSnapshots(to dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for size in [HUDWidgetSize.small, .medium] {
+            for pinnedOnly in [false, true] {
+                let name = "\(ClipsWidget.type)-\(size.rawValue)\(pinnedOnly ? "-pinned" : "").png"
+                let settings: [String: HUDSettingValue] = pinnedOnly ? [ClipsWidget.pinnedOnlyKey: .bool(true)] : [:]
+                do {
+                    try widgets.writeSnapshot(type: ClipsWidget.type, size: size, settings: settings, to: dir.appending(path: name))
+                    print(dir.appending(path: name).path(percentEncoded: false))
+                } catch {
+                    NSLog("Stash: widget snapshot %@ failed: %@", name, "\(error)")
+                }
             }
         }
     }

@@ -17,6 +17,9 @@ final class ControlHost: HUDPanelHost {
                           capabilities: ["providesDrag", HUDTextFeed.capability],
                           verbs: ["show", "hide", "toggle", "frame", "mode", "paste"],
                           settingsSchema: "settings.json", kind: .hover, order: 2),
+        HUDManifest.Panel(id: ClipsWidget.type, title: "Latest Clips", symbol: "doc.on.clipboard", kind: .widget,
+                          widget: HUDWidgetSpec(sizes: [.small, .medium], defaultSize: .small, multiple: true,
+                                                settingsSchema: "clips.widget.json")),
     ])
 
     let manifest: HUDManifest

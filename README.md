@@ -8,7 +8,7 @@ Stash lives in the menu bar (no Dock icon) and keeps a searchable history of wha
 text, rich text, images, files and links, with pinned clips and a compact strip of the last
 five. On its own it shows its panel from the menu bar icon or ⌃⌥V; inside MacHUD it is a hover
 button in the tool dock (order 2, after Scratch) whose panel slides out while the pointer is
-over it.
+over it. It also offers a desktop widget, Latest Clips, that MacHUD can place on your desktop.
 
 ## Install
 
@@ -51,6 +51,22 @@ drag source (`providesDrag`).
 Pasting sends a simulated ⌘V, which needs Accessibility (menu bar icon > Grant
 Accessibility…). Without it, Stash copies the clip and shows a hint instead.
 
+## Latest Clips widget
+
+A desktop widget for MacHUD (needs MacHUD with widget support, HUDKit contract 0.3): add it from
+MacHUD's widget gallery. It comes in two sizes. **Small** shows the newest clip (a text preview, or a thumbnail for an image or file);
+**medium** shows the newest three. Click a clip to copy it back onto the clipboard, the same as a
+click in the panel: the row flashes "Copied", the order does not change and Stash does not record
+its own copy as a new clip. You can place several, each with its own setting:
+
+| Setting | Default | |
+|---|---|---|
+| Pinned clips only (`pinnedOnly`) | off | show only pinned clips, newest first |
+
+The widget shows what is on your clipboard history on the desktop, to anyone who can see your
+screen. Clips from password managers and concealed copies are never recorded in the first place
+(see Privacy).
+
 ## Privacy
 
 Nothing leaves your Mac. History is stored in `~/Library/Application Support/Stash`
@@ -66,9 +82,11 @@ Stash does not record a copy when:
 
 ## MacHUD contract
 
-Panel `history`, kind `hover`, socket `stash`. Verbs: the HUDKit set (`hello`, `state`,
+Panel `history`, kind `hover`, socket `stash`, plus the widget type `clips` (kind `widget`, served
+through HUDKit's `HUDWidgetHost`; see [docs/CONTRACT.md](docs/CONTRACT.md)). Verbs: the HUDKit set (`hello`, `state`,
 `subscribe`, `panel show|hide|toggle|frame|mode`, `settings get|set|schema`, `action`, `quit`)
-plus `action copy`, `copy-clip`, `paste`, `search`, `list`, `pin`, `delete` and `clear`. Full
+`widget create|update|remove|list|sync|edit|reveal|schema`, plus `action copy`, `copy-clip`,
+`paste`, `search`, `list`, `pin`, `delete` and `clear`. Full
 reference: [docs/CONTRACT.md](docs/CONTRACT.md).
 
 ```sh
@@ -108,16 +126,18 @@ build/Stash.app/Contents/MacOS/Stash --demo --snapshot /tmp/strip.png --snapshot
 `--snapshot <png>` writes a picture of the panel without Screen Recording permission. It
 takes `--snapshot-mode compact`, `--snapshot-query <q>` and `--snapshot-hover <n>` (draws
 clip n, 1 = newest, as hovered), and quits after with `--snapshot-quit`. `--demo` fills a
-throwaway history with sample clips on a private pasteboard.
+throwaway history with sample clips on a private pasteboard. `--snapshot-widgets <dir>` writes
+the Latest Clips widget at each size (`clips-small.png`, `clips-medium.png`, and `-pinned`
+variants) the same way.
 
 `build.sh` and `install.sh` call HUDKit's shared `scripts/hud-build.sh` and
 `scripts/hud-install.sh` (set `HUDKIT_DIR` if HUDKit lives elsewhere). The version comes from
 [VERSION](VERSION); changes are in [CHANGELOG.md](CHANGELOG.md).
 
 Layout: `Sources/StashKit` is the UI-free core (`ClipboardWatcher`, `Clip`, `ClipReader`,
-`ClipStore`, `StashSettings`, `EventThrottle`). `Sources/Stash` is the app (bundle files in
+`ClipStore`, `StashSettings`, `EventThrottle`, `ClipsWidgetSelection`). `Sources/Stash` is the app (bundle files in
 `Sources/Stash/Resources`), `Sources/StashCLI` the `stash` CLI, and `Tests/` covers StashKit,
-the app's host logic (click-copy, hover chrome, parking, frames, environment) and the manifest.
+the app's host logic (click-copy, hover chrome, parking, frames, environment, the widget) and the manifest.
 
 ## Isolation env vars for testing
 

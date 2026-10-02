@@ -14,7 +14,10 @@ This page lists what Stash adds.
 - Manifest: `Sources/Stash/Resources/machud.json`: app `xyz.machud.stash`, socket `stash`, one
   panel `history` (`kind: hover`, `order: 2`, symbol `list.clipboard`, default 460x560, compact
   640x104, capabilities `providesDrag` and `text-feed`, verbs `show hide toggle frame mode paste`,
-  settings schema `settings.json`).
+  settings schema `settings.json`), and the widget type `clips` (`kind: widget`, symbol
+  `doc.on.clipboard`, sizes `small` and `medium`, default `small`, several instances,
+  per-instance settings schema `clips.widget.json`). The widget has no dock button and no
+  `panel` verbs: `panel show id=clips` answers `no such panel`, and `state` lists only `history`.
 - Hover: `panel show from=<edge> anchor=x,y,w,h` slides the panel out of the dock (to the
   `panel frame` MacHUD assigned, else next to the anchor); `panel hide to=<edge>` slides it back
   in 0.1 s. `reason=hover` fades in over 0.08 s and never takes focus; other shows focus the
@@ -49,12 +52,32 @@ This page lists what Stash adds.
 | `action clear` | `all=1` (optional) | removes unpinned clips, or everything with `all=1` |
 | `action show` / `hide` / `toggle` | | same as the panel verbs |
 | `feed` | `action=add text= source= title=?` `date=?` (ISO 8601) | HUDKit's `text-feed` capability (registered directly, like `sessions` for `agent-sessions`): records `text` as a history item tagged with `source` (a short label such as `Dictation`, shown with a small icon instead of an app name) rather than a pasteboard copy — the pasteboard is never touched, so the clipboard watcher never sees it. Searchable, pasteable, subject to the same cap as any clip. A `source` on `ignoredFeedSources` is accepted but not recorded (`id` comes back empty). Returns `{ok, id}` |
+| `widget` | `action=create\|update\|remove\|list\|sync\|edit\|reveal\|schema` | HUDKit's widget verb for the `clips` type: MacHUD owns the instance records and sends them (`sync` after every connect), Stash draws them. See [Widgets](#widgets) below and HUDKit's [contract](https://github.com/jamesrisberg/hudkit/blob/main/docs/CONTRACT.md#widgets) for the verb, instance and event shapes. |
 | `quit` | | replies, then quits (the socket file is removed) |
 | `help` | | lists the registered commands |
 
 Each result is `{index, id, kind, title, pinned, size, date, source?, feed?, paths?}`. `kind` is
 `text`, `richText`, `image`, `files` or `url`. `source` is the bundle id of the app that was
 frontmost when the clip was copied, or (with `feed: true`) the `text-feed` sender's label.
+
+## Widgets
+
+One widget type, `clips` (Latest Clips), registered on a `HUDWidgetHost` that is the router's
+`widgetHost` before the socket starts.
+
+| Size | Shows |
+|---|---|
+| `small` | the newest clip: type icon, age, a text preview (up to six lines) or a thumbnail and title for an image or file, a "Click to copy" hint |
+| `medium` | the newest three clips as rows: type tile or thumbnail, one-line preview, age, a pin mark |
+
+An instance's settings (schema `clips.widget.json`, read from `Contents/Resources`):
+`pinnedOnly` (bool, default false) limits the list to pinned clips, newest first. With nothing to
+show the widget says "Nothing copied yet" (or "No pinned clips").
+
+A click on a clip runs the app's click-copy (the `copy-clip` action): the clip goes onto the
+pasteboard (the private one under `STASH_PASTEBOARD`), the row shows "Copied" for 600 ms, and the
+history order and count do not change. The widget never takes focus; it follows the history live
+(it observes the app model), and `--snapshot-widgets <dir>` renders it for checking.
 
 ## Settings
 

@@ -14,6 +14,18 @@
       "settingsSchema": "settings.json",
       "kind": "hover",
       "order": 2
+    },
+    {
+      "id": "clips",
+      "title": "Latest Clips",
+      "symbol": "doc.on.clipboard",
+      "kind": "widget",
+      "widget": {
+        "sizes": ["small", "medium"],
+        "defaultSize": "small",
+        "multiple": true,
+        "settingsSchema": "clips.widget.json"
+      }
     }
   ]
 }

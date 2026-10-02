@@ -6,6 +6,12 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- A desktop widget, Latest Clips, for MacHUD: small shows your newest clip, medium the newest
+  three. Click a clip to copy it back onto the clipboard. Place it more than once, and set
+  "Pinned clips only" per widget to show just your pinned clips. It needs a MacHUD with widget
+  support (HUDKit contract 0.3).
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

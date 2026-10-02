@@ -44,17 +44,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Desktop widgets: set before the socket starts, MacHUD syncs its instances on connect.
         widgets = ClipsWidget.makeHost(model: model, manifest: control.manifest)
         control.router.widgetHost = widgets
-        control.start()
-        model.start()
-        setupStatusItem()
-        // While MacHUD runs, its menu hosts this one and the icon hides (HUDKit menu bar consolidation).
-        control.router.menuProvider = { [weak self] in self?.statusItem?.menu }
-        // menuBar.consumed is kept in <data directory>/menubar.json, so STASH_HOME isolates it too.
-        HUDStatusItemPolicy.attach(statusItem, appID: control.manifest.id,
-                                   store: .home(AppEnvironment.dataDirectory ?? ClipStore.defaultDirectory))
-        if !AppEnvironment.noHotKeys,
-           HUDHotKeyCenter.shared.register(Self.hotKey, onPress: { [weak self] in self?.panel.toggle() }) == nil {
-            model.flash("⌃⌥V is taken by another app; use the menu bar icon", seconds: 8)
+        // A snapshot run only draws: no control socket (a running app owns that name), no
+        // announcement, no clipboard watcher (it would record into the real history beside the
+        // running app), no hotkey, no menu bar item.
+        let snapshotting = value("--snapshot") != nil || value("--snapshot-widgets") != nil
+        if !snapshotting {
+            control.start()
+            model.start()
+            setupStatusItem()
+            // While MacHUD runs, its menu hosts this one and the icon hides (HUDKit menu bar consolidation).
+            control.router.menuProvider = { [weak self] in self?.statusItem?.menu }
+            // menuBar.consumed is kept in <data directory>/menubar.json, so STASH_HOME isolates it too.
+            HUDStatusItemPolicy.attach(statusItem, appID: control.manifest.id,
+                                       store: .home(AppEnvironment.dataDirectory ?? ClipStore.defaultDirectory))
+            if !AppEnvironment.noHotKeys,
+               HUDHotKeyCenter.shared.register(Self.hotKey, onPress: { [weak self] in self?.panel.toggle() }) == nil {
+                model.flash("⌃⌥V is taken by another app; use the menu bar icon", seconds: 8)
+            }
         }
 
         // First launch shows the panel so the user sees something happen.

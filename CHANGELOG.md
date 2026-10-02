@@ -12,6 +12,11 @@ All notable changes to Stash are documented here. The format follows
   "Pinned clips only" per widget to show just your pinned clips. It needs a MacHUD with widget
   support (HUDKit contract 0.3).
 
+### Fixed
+- `--snapshot` and `--snapshot-widgets` draw only: they no longer start the control socket under
+  the app's default name (which clashed with the running app), watch the clipboard, register
+  the hotkey or add a second menu bar icon.
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

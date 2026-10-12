@@ -17,4 +17,12 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(AppEnvironment.dataDirectory(in: ["STASH_HOME": "~/x"])?.path,
                        (NSHomeDirectory() as NSString).appendingPathComponent("x"))
     }
+
+    /// `STASH_LOG_KEY_TARGET=1` logs each key's target app (never what was typed) for checking
+    /// expansion's attribution live.
+    func testKeyTargetLoggingIsOptIn() {
+        XCTAssertFalse(AppEnvironment.logsKeyTarget(in: [:]))
+        XCTAssertFalse(AppEnvironment.logsKeyTarget(in: ["STASH_LOG_KEY_TARGET": "0"]))
+        XCTAssertTrue(AppEnvironment.logsKeyTarget(in: ["STASH_LOG_KEY_TARGET": "1"]))
+    }
 }

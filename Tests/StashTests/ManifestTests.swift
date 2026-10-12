@@ -21,11 +21,13 @@ final class ManifestTests: XCTestCase {
         let schema = try XCTUnwrap(panel.settingsSchema)
         let settings = try JSONSerialization.jsonObject(with: Data(contentsOf: resources.appending(path: schema))) as? [String: Any]
         let keys = (settings?["settings"] as? [[String: Any]])?.compactMap { $0["key"] as? String }
-        XCTAssertEqual(Set(keys ?? []), ["historyCap", "pollIntervalMs", "ignoreList", "pasteOnEnter", "ignoredFeedSources"])
+        XCTAssertEqual(Set(keys ?? []), ["historyCap", "pollIntervalMs", "ignoreList", "pasteOnEnter", "ignoredFeedSources",
+                                         "snippetExpansion"])
 
         // HUDKit's shared schema reader accepts it and validates wire values against it.
         let parsed = try HUDSettingsSchema.decode(Data(contentsOf: resources.appending(path: schema)))
-        XCTAssertEqual(parsed.settings.count, 5)
+        XCTAssertEqual(parsed.settings.count, 6)
+        XCTAssertEqual(parsed.field("snippetExpansion")?.default, .bool(false), "off until the user switches from Alfred")
         XCTAssertNoThrow(try parsed.validate(["historyCap": "50", "pollIntervalMs": "300", "pasteOnEnter": "false",
                                               "ignoreList": "a.b,c.d"]))
         XCTAssertThrowsError(try parsed.validate(["historyCap": "lots"]))

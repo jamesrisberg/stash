@@ -35,6 +35,13 @@
       "type": "string",
       "default": "",
       "help": "Comma-separated text-feed sources to ignore (e.g. Dictation). Shown by default."
+    },
+    {
+      "key": "snippetExpansion",
+      "title": "Expand snippet keywords as you type",
+      "type": "bool",
+      "default": false,
+      "help": "Needs Accessibility. Turn Alfred's snippet expansion off first, or both expand the same keyword."
     }
   ]
 }

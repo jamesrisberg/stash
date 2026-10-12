@@ -20,9 +20,10 @@ enum Paster {
         }
     }
 
-    /// Posts ⌘V. Returns false when not permitted.
+    /// Posts ⌘V. Returns false when not permitted. `tag` goes in the events'
+    /// `eventSourceUserData`, so Stash's own key tap can tell them from the user's typing.
     @discardableResult
-    static func postCommandV() -> Bool {
+    static func postCommandV(tag: Int64 = 0) -> Bool {
         guard isTrusted else { return false }
         let source = CGEventSource(stateID: .combinedSessionState)
         let key = CGKeyCode(kVK_ANSI_V)
@@ -30,6 +31,8 @@ enum Paster {
               let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return false }
         down.flags = .maskCommand
         up.flags = .maskCommand
+        down.setIntegerValueField(.eventSourceUserData, value: tag)
+        up.setIntegerValueField(.eventSourceUserData, value: tag)
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
         return true

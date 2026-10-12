@@ -28,6 +28,7 @@ This page lists what Stash adds.
   by `install.sh`). `stash action copy text=x` is shorthand for `action name=copy text=x`.
   `stash copy`, `list`, `paste`, `search`, `pin`, `delete` and `clear` are shorthands for the
   actions, `stash copy` with no text reads stdin, and `stash watch` prints state events.
+  `stash snippets list query=sig` sends `{"command": "snippets", "args": {"_": "list", "query": "sig"}}`.
 
 ## Verbs
 
@@ -39,7 +40,7 @@ This page lists what Stash adds.
 | `panel show` / `hide` / `toggle` | `id=history`, optional `from=`/`to=<edge>`, `anchor=x,y,w,h`, `reason=hover\|click\|summon` | fades in or out; `from=` slides out of the dock edge (to the `panel frame` MacHUD assigned, else next to `anchor`), `to=` slides back in 0.1 s; `reason=hover` fades in over 0.08 s and never takes focus, other shows focus the search field. A show during a hide wins |
 | `panel frame` | `id=history x= y= w= h=` | AppKit screen coordinates, kept as the frame for the current mode |
 | `panel mode` | `id=history` + `full`, `compact` or `parked` | `compact` is the strip of the five newest clips. `parked` slides the panel to the nearest screen edge, leaving a 14 pt sliver (or to `edge=left/right/top/bottom` with a `peek=` pt sliver when given, as MacHUD does; they are remembered for later bare `parked`s), and `show`/`toggle` slides it back (HUDKit `HUDParking`). Switching to `full` or `compact` shows the panel. |
-| `settings get` | `key=` (optional) | `historyCap` (int), `pollIntervalMs` (int), `ignoreList` (comma-separated bundle ids), `pasteOnEnter` (bool) |
+| `settings get` | `key=` (optional) | `historyCap` (int), `pollIntervalMs` (int), `ignoreList` (comma-separated bundle ids), `pasteOnEnter` (bool), `ignoredFeedSources` (comma-separated labels), `snippetExpansion` (bool) |
 | `settings set` | `key=value ...` | validates every value before applying any; saved to `preferences.json` |
 | `settings schema` | | `{schema}` from `settings.json` via HUDKit's `HUDSettingsSchema` |
 | `action copy` | `text=` | puts the text on the pasteboard and records it; returns `{count, id}` |
@@ -53,8 +54,15 @@ This page lists what Stash adds.
 | `action show` / `hide` / `toggle` | | same as the panel verbs |
 | `feed` | `action=add text= source= title=?` `date=?` (ISO 8601) | HUDKit's `text-feed` capability (registered directly, like `sessions` for `agent-sessions`): records `text` as a history item tagged with `source` (a short label such as `Dictation`, shown with a small icon instead of an app name) rather than a pasteboard copy — the pasteboard is never touched, so the clipboard watcher never sees it. Searchable, pasteable, subject to the same cap as any clip. A `source` on `ignoredFeedSources` is accepted but not recorded (`id` comes back empty). Returns `{ok, id}` |
 | `widget` | `action=create\|update\|remove\|list\|sync\|edit\|reveal\|schema` | HUDKit's widget verb for the `clips` type: MacHUD owns the instance records and sends them (`sync` after every connect), Stash draws them. See [Widgets](#widgets) below and HUDKit's [contract](https://github.com/jamesrisberg/hudkit/blob/main/docs/CONTRACT.md#widgets) for the verb, instance and event shapes. |
+| `snippets list` | `query=` (optional), `limit=` (default 50) | `{snippets: [{id, name, keyword, collection, preview}]}`. `query` matches name, keyword and collection, case-insensitively, best first: keyword equal, keyword prefix, name prefix, a name word's prefix, keyword contains, name contains, collection contains; ties by collection, then name. No query lists every snippet by collection, then name. `preview` is the expanded text on one line, cut to 80 characters with `…`; `{date}` and `{time}` are filled in, `{clipboard}` stays as typed so a list never shows the clipboard. |
+| `snippets insert` | `id=` | fills in the placeholders and pastes the text into the frontmost app 0.12 s later (after a panel or bar has closed), then restores the clipboard: `{ok: true, pasted: true}`. Without Accessibility, or with a private pasteboard, it copies the text only: `{ok: true, pasted: false, hint}`, with the hints `action paste` uses. Neither is recorded as a clip. `no snippet <id>` for an unknown id. |
+| `snippets import-alfred` | `dry-run=1` (optional), `path=` (optional, a `snippets` folder; default Alfred's, following its synced-preferences setting) | reads Alfred's snippets and adds or updates them by Alfred's uid (never duplicating; snippets made in Stash are kept). `{dryRun, snippets, collections, byCollection: {name: count}, added, updated, unchanged, skipped, unknownPlaceholders: {token: count}}`; `dry-run=1` counts without writing. `skipped` counts unreadable `.json` files; `unknownPlaceholders` counts the `{…}` tokens left as typed by Alfred placeholder name (`cursor`, `snippet`, `date` for `{date:short}`, …) or `other`, never quoting a snippet's text. Collection names are reported as they are. |
+| `snippets expansion` | `on`/`off` (or `state=`, `enabled=`; optional) | switches typed-keyword expansion (the `snippetExpansion` setting) and reports it: `{expansion: "on"\|"off", active, hint?}`. `active` is whether the key tap is running; `hint` says Accessibility is missing. |
 | `quit` | | replies, then quits (the socket file is removed) |
 | `help` | | lists the registered commands |
+
+`snippets` is registered on the server directly (like `feed`); its action is the first bare word
+(`_`) or `action=`.
 
 Each result is `{index, id, kind, title, pinned, size, date, source?, feed?, paths?}`. `kind` is
 `text`, `richText`, `image`, `files` or `url`. `source` is the bundle id of the app that was
@@ -87,11 +95,41 @@ history order and count do not change. The widget never takes focus; it follows 
 | `pollIntervalMs` | int (50-5000) | `250` |
 | `ignoreList` | string (comma-separated bundle ids) | password managers and Keychain Access |
 | `pasteOnEnter` | bool | `true` |
+| `snippetExpansion` | bool | `false` (typed keywords expand in place; needs Accessibility) |
 | `ignoredFeedSources` | string (comma-separated `text-feed` source labels) | `""` (shows every source) |
 
 Described by `Sources/Stash/Resources/settings.json` in HUDKit's `HUDSettingsSchema` format
 (`{"version": 1, "settings": [{"key", "title", "type", "default"?, "help"?}]}`). Stored in
 `<home>/preferences.json`, where home is `~/Library/Application Support/Stash` or `$STASH_HOME`.
+
+## Snippets
+
+Kept in `<home>/snippets.json` (`{"version": 1, "collections": [...], "snippets": [{id, name,
+keyword, text, collection, autoExpand}]}`), rewritten atomically on every change. An imported
+snippet's `id` is Alfred's uid. An unreadable file is moved aside (`snippets.unreadable-<time>.json`).
+
+Expansion, while `snippetExpansion` is on: a session event tap (`.defaultTap`, which the
+Accessibility permission allows; every event passes through unchanged) runs on its own thread
+at the tail of the annotated session taps (`cgAnnotatedSessionEventTap`, `tailAppendEventTap`,
+so it sees only keys other taps let through, annotated with their target application) and hands
+each key, with the process it targets (`eventTargetUnixProcessID`), to the main thread. That
+process is trusted whenever the event names one. A key that names none counts as typed in Stash
+while one of Stash's windows has the keyboard (the hover panel takes keys without Stash being
+frontmost), else as typed in the frontmost app. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
+navigation keys (arrows, Home, End, Page Up/Down, Tab, Return, Escape, Forward Delete), ⌘ or ⌃
+shortcuts, Delete with any modifier, dead keys and the key after one, clicks, app switches and a
+different target app. Nothing is kept while secure input is on, an input method is the selected
+input source, or the target is an app on `ignoreList`, Stash or MacHUD (`com.jrisberg.machud`,
+whose search bar finds snippets by keyword). Keywords match typed ASCII best. When the buffer
+ends with an auto-expanding snippet's keyword (the longest wins; case-sensitive), Stash posts one
+Delete per keyword character, puts the text on the clipboard (with Stash's marker and the
+nspasteboard.org transient and concealed types), posts ⌘V, and restores the previous clipboard
+0.3 s later (3 s for an Electron app) unless something else was copied since. One restore is
+pending at a time: a snippet inserted before the previous one's restore (an expansion or
+`snippets insert`) reuses the clipboard saved for it and replaces its restore. Stash types the
+text as key events instead when it cannot paste (a private pasteboard, a clipboard over 16 MB, a
+failed write; after a failed write the saved clipboard goes back at once). Every event Stash posts carries `eventSourceUserData` `0x53545348`, which the tap
+ignores. Without Accessibility the tap is retried every 3 s.
 
 ## Menu bar consolidation
 
@@ -105,10 +143,11 @@ See [menu bar consolidation](https://github.com/jamesrisberg/hudkit/blob/main/do
 
 | Variable | Read by | Effect |
 |---|---|---|
-| `STASH_HOME` | app | base directory for history, blobs, preferences and frames. |
+| `STASH_HOME` | app | base directory for history, blobs, snippets, preferences and frames. |
 | `STASH_SOCKET` | app, CLI | socket name or absolute path instead of `stash` |
 | `STASH_NO_HOTKEYS` | app | `1` skips registering ⌃⌥V |
 | `STASH_PASTEBOARD` | app | watch and write a private named pasteboard; simulated ⌘V is disabled then |
+| `STASH_LOG_KEY_TARGET` | app | `1` logs, while expansion is on, the app each key goes to (process and bundle id, never what was typed), to check attribution |
 | `STASH_INTEGRATION` | tests | `1` runs the general-pasteboard integration test |
 
 An instance with any of `STASH_HOME`, `STASH_SOCKET` or `STASH_PASTEBOARD` set is isolated: it
@@ -123,7 +162,8 @@ never touches the user's defaults, and keeps panel frames only when it has its o
 | `--snapshot-mode compact` | picture the compact strip |
 | `--snapshot-query <q>` | picture a search |
 | `--snapshot-hover <n>` | draw clip n (1 = newest) as hovered |
-| `--demo` | sample clips in a throwaway history (or `$STASH_HOME`) on a private pasteboard |
+| `--snapshot-snippets <path.png>` | show the Snippets window (first snippet selected) and write a PNG of it after 1.5 s; draws only, like `--snapshot` |
+| `--demo` | sample clips and snippets in a throwaway history (or `$STASH_HOME`) on a private pasteboard |
 | `--show` | show the panel at launch |
 
 ## Example
@@ -139,6 +179,10 @@ stash paste 1
 stash panel mode id=history compact
 stash settings set historyCap=500 pasteOnEnter=false
 stash feed action=add text="remind me to call back" source=Dictation
+stash snippets import-alfred dry-run=1
+stash snippets list query=sig limit=5
+stash snippets insert id=<id>
+stash snippets expansion on
 stash watch
 stash quit
 ```

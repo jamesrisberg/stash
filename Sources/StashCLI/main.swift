@@ -12,6 +12,8 @@ import HUDKit
 //   stash list                     # newest first, with indexes
 //   stash paste 2                  # copy clip 2 and paste it into the frontmost app
 //   stash action search q=invoice
+//   stash snippets list query=sig  # snippets by name, keyword or collection
+//   stash snippets insert id=<id>  # paste a snippet into the frontmost app
 //   stash watch                    # print pushed events until interrupted
 //   stash quit
 
@@ -26,6 +28,10 @@ usage: stash <command> [key=value ...]
   panel frame id=history x= y= w= h=
   panel mode id=history full|compact|parked
   action copy text= | copy-clip index= | paste index= | search q= | list | pin index= | delete index= | clear [all=1]
+  snippets list [query=] [limit=50]     snippets, best match first
+  snippets insert id=                  paste a snippet (placeholders filled in) into the frontmost app
+  snippets import-alfred [dry-run=1]   import or update Alfred's snippets (dry-run only counts)
+  snippets expansion [on|off]          typed-keyword expansion (off by default)
   settings get [key=]  |  settings set key=value ...
   watch [events=state]         stream events (Ctrl-C to stop)
 

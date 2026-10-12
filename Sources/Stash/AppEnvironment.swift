@@ -11,6 +11,8 @@ import StashKit
 ///   general one. Simulated ⌘V is disabled then, since the target app would paste the
 ///   general pasteboard.
 /// - `STASH_NO_HOTKEYS=1`: do not register ⌃⌥V.
+/// - `STASH_LOG_KEY_TARGET=1`: while snippet expansion is on, log the app each key goes to
+///   (bundle id and process, never what was typed), to check attribution.
 enum AppEnvironment {
     static let env = ProcessInfo.processInfo.environment
 
@@ -27,6 +29,10 @@ enum AppEnvironment {
     static var pasteboardName: String? { nonEmpty("STASH_PASTEBOARD") }
 
     static var noHotKeys: Bool { env["STASH_NO_HOTKEYS"] == "1" }
+
+    static var logsKeyTarget: Bool { logsKeyTarget(in: env) }
+
+    static func logsKeyTarget(in env: [String: String]) -> Bool { env["STASH_LOG_KEY_TARGET"] == "1" }
 
     static var pasteboard: NSPasteboard {
         pasteboardName.map { NSPasteboard(name: NSPasteboard.Name($0)) } ?? .general

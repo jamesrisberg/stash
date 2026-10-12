@@ -92,6 +92,9 @@ final class AppModel: ObservableObject {
 
     func start() { watcher.start() }
 
+    /// Whether a simulated ⌘V would paste what Stash wrote (not with a private pasteboard).
+    var canSimulatePaste: Bool { AppEnvironment.pasteboardName == nil && pasteboard == .general }
+
     // MARK: - Lists
 
     var filtered: [Clip] { ClipStore.filter(clips, query: query) }
@@ -210,7 +213,9 @@ final class AppModel: ObservableObject {
     }
 
     /// Runs the click action for the current mouse event.
-    func click(_ clip: Clip, event: NSEvent? = NSApp.currentEvent) {
+    func click(_ clip: Clip) { click(clip, event: NSApp.currentEvent) }
+
+    func click(_ clip: Clip, event: NSEvent?) {
         let mouse = event.flatMap { [.leftMouseUp, .leftMouseDown].contains($0.type) ? $0 : nil }
         switch Self.clickAction(clickCount: mouse?.clickCount ?? 1,
                                 modifiers: mouse?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []) {

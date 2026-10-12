@@ -32,6 +32,9 @@ final class ControlHost: HUDPanelHost {
     private var routerWillPublish = false
     /// New-clip state events: at most one a second, bursts collapse into one trailing event.
     private var throttle = EventThrottle(interval: 1)
+    /// Serves the `snippets` verb (MacHUD's search bar finds and inserts snippets through it).
+    /// Set before `start()`.
+    var snippets: SnippetsController?
 
     init(model: AppModel, panel: PanelController, paste: @escaping (Clip, Bool) -> [String: Any]) {
         self.model = model
@@ -52,6 +55,12 @@ final class ControlHost: HUDPanelHost {
         server.register(HUDTextFeed.command) { [weak self] args, done in
             guard let self else { done(["ok": false, "error": "host gone"]); return }
             self.handleFeed(args, done: done)
+        }
+        if let snippets {
+            server.register(SnippetsController.command) { [weak snippets] args, done in
+                guard let snippets else { done(["ok": false, "error": "host gone"]); return }
+                snippets.handle(args, done: done)
+            }
         }
         if !server.start() { NSLog("Stash: control socket failed to start at %@", server.path) }
         panel.onStateChange = { [weak self] in self?.publishIfChanged() }

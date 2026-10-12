@@ -30,6 +30,18 @@ final class SettingsTests: XCTestCase {
         XCTAssertThrowsError(try s.applying(["color": "red"]))
     }
 
+    /// Off until the user switches from Alfred: otherwise both would expand the same keyword.
+    func testSnippetExpansionIsOffByDefault() throws {
+        let s = StashSettings()
+        XCTAssertFalse(s.snippetExpansion)
+        XCTAssertEqual(s.json["snippetExpansion"] as? Bool, false)
+        XCTAssertTrue(try s.applying(["snippetExpansion": "on"]).snippetExpansion)
+        XCTAssertFalse(try s.applying(["snippetExpansion": "false"]).snippetExpansion)
+        XCTAssertThrowsError(try s.applying(["snippetExpansion": "sometimes"]))
+        let old = try JSONDecoder().decode(StashSettings.self, from: Data(#"{"historyCap": 30}"#.utf8))
+        XCTAssertFalse(old.snippetExpansion, "a preferences file from before snippets keeps expansion off")
+    }
+
     func testStoreRoundTripAndPartialFiles() throws {
         let dir = FileManager.default.temporaryDirectory.appending(path: "StashSettings-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

@@ -50,17 +50,25 @@ public struct KeyInput: Equatable, Sendable {
 /// typed into the frontmost app; when the buffer ends with an auto-expanding snippet's
 /// keyword, reports the snippet and how many characters to delete, and starts over.
 ///
-/// The buffer resets on navigation keys, shortcuts (⌘ or ⌃ held), a different frontmost app,
-/// and `reset()` (clicks, app switches). While secure input is on (a password field) or an
-/// ignored app is frontmost nothing is kept at all. Keywords are case-sensitive and match
-/// anywhere, as in Alfred.
+/// The buffer resets on navigation keys, shortcuts (⌘ or ⌃ held), Delete with any modifier
+/// (which removes a word or a line in the app, not one character), a different target app, and
+/// `reset()` (clicks, app switches). While secure input is on (a password field), an input
+/// method is composing, or an ignored app is the target, nothing is kept at all. A dead key
+/// (⌥E, then a letter) composes a character in the app that the key events do not show, so
+/// the dead key and the key after it start over too: keywords match typed ASCII best. Keywords
+/// are case-sensitive and match anywhere, as in Alfred.
 public final class SnippetExpansionEngine {
     public struct Context: Equatable, Sendable {
         public var secureInput: Bool
+        /// The app the key goes to.
         public var frontmostBundleID: String?
-        public init(secureInput: Bool, frontmostBundleID: String?) {
+        /// An input method (not a plain keyboard layout) is the input source: keys go into
+        /// marked text, not straight into the document.
+        public var composing: Bool
+        public init(secureInput: Bool, frontmostBundleID: String?, composing: Bool = false) {
             self.secureInput = secureInput
             self.frontmostBundleID = frontmostBundleID
+            self.composing = composing
         }
     }
 
@@ -81,6 +89,8 @@ public final class SnippetExpansionEngine {
 
     public private(set) var buffer = ""
     private var bufferApp: String?
+    /// A dead key was pressed: the next character is composed in the app.
+    private var afterDeadKey = false
     private var candidates: [Snippet] = []
 
     public init() {}
@@ -88,11 +98,12 @@ public final class SnippetExpansionEngine {
     public func reset() {
         buffer = ""
         bufferApp = nil
+        afterDeadKey = false
     }
 
     /// Feeds one key press. Returns the snippet to expand when this key completed a keyword.
     public func handle(_ key: KeyInput, context: Context) -> Match? {
-        guard isEnabled, !context.secureInput,
+        guard isEnabled, !context.secureInput, !context.composing,
               !(context.frontmostBundleID.map(ignoredBundleIDs.contains) ?? false) else {
             reset()
             return nil
@@ -101,7 +112,10 @@ public final class SnippetExpansionEngine {
             reset()
             bufferApp = context.frontmostBundleID
         }
-        if !key.modifiers.isDisjoint(with: [.command, .control]) || KeyInput.Code.resetting.contains(key.keyCode) {
+        let startOver = !key.modifiers.isDisjoint(with: [.command, .control])
+            || KeyInput.Code.resetting.contains(key.keyCode)
+            || (key.keyCode == KeyInput.Code.delete && !key.modifiers.isEmpty)
+        if startOver {
             reset()
             bufferApp = context.frontmostBundleID
             return nil
@@ -110,7 +124,15 @@ public final class SnippetExpansionEngine {
             if !buffer.isEmpty { buffer.removeLast() }
             return nil
         }
-        guard !key.characters.isEmpty, !key.characters.contains(where: \.isNewline) else { return nil }
+        // A key that types nothing is a dead key (or a function key); the key after a dead
+        // key types a character the event does not show. Neither is counted.
+        if key.characters.isEmpty || afterDeadKey {
+            reset()
+            bufferApp = context.frontmostBundleID
+            afterDeadKey = key.characters.isEmpty
+            return nil
+        }
+        guard !key.characters.contains(where: \.isNewline) else { return nil }
         buffer += key.characters
         if buffer.count > Self.maxBuffer { buffer = String(buffer.suffix(Self.maxBuffer)) }
 

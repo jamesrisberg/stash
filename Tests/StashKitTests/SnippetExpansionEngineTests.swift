@@ -108,10 +108,30 @@ final class SnippetExpansionEngineTests: XCTestCase {
         XCTAssertEqual(engine.handle(key("º", .option), context: editor)?.snippet.id, "deg")
     }
 
-    func testDeadKeysWithNoCharactersAreIgnored() {
+    func testBackspaceWithAModifierResets() {
+        for modifiers: KeyInput.Modifiers in [.option, .shift, .command, .control] {
+            type("sigx")
+            XCTAssertNil(press(KeyInput.Code.delete, modifiers))
+            XCTAssertEqual(engine.buffer, "", "\(modifiers) Delete removes more than one character in the app")
+            XCTAssertTrue(type("g").isEmpty)
+        }
+    }
+
+    /// A dead key (⌥E, then a letter) composes in the app; what the buffer would hold is not
+    /// what was typed, so the dead key and the key that completes it both start over.
+    func testDeadKeysStartOver() {
         type("si")
-        XCTAssertNil(engine.handle(key("", code: 32, .option), context: editor), "⌥U starts a dead key")
-        XCTAssertEqual(type("g").map(\.snippet.id), ["sig"])
+        XCTAssertNil(engine.handle(key("", code: 14, .option), context: editor), "⌥E starts a dead key")
+        XCTAssertEqual(engine.buffer, "")
+        XCTAssertTrue(type("e").isEmpty, "the composed character is not counted")
+        XCTAssertEqual(engine.buffer, "")
+        XCTAssertEqual(type("sig").map(\.snippet.id), ["sig"], "typing after it counts again")
+    }
+
+    func testAnInputMethodComposingNeverMatches() {
+        let composing = SnippetExpansionEngine.Context(secureInput: false, frontmostBundleID: "com.example.editor", composing: true)
+        XCTAssertTrue(type("sig", context: composing).isEmpty)
+        XCTAssertEqual(engine.buffer, "")
     }
 
     func testClicksAndAppSwitchesReset() {

@@ -20,7 +20,8 @@ final class SnippetsController: ObservableObject {
     let engine = SnippetExpansionEngine()
     let alfredFolder: URL
     private let model: AppModel
-    private let driver: SnippetInsertionDriver
+    /// Inserts for both expansion and `insert`, so one pending clipboard restore covers both.
+    private let inserter: SnippetInserter
 
     @Published private(set) var snippets: [Snippet] = []
     @Published private(set) var collections: [String] = []
@@ -45,7 +46,7 @@ final class SnippetsController: ObservableObject {
 
     init(model: AppModel, driver: SnippetInsertionDriver, alfredFolder: URL = AlfredSnippetImporter.defaultFolder()) {
         self.model = model
-        self.driver = driver
+        inserter = SnippetInserter(driver: driver)
         self.alfredFolder = alfredFolder
         store = SnippetStore(directory: model.directory)
         canSimulatePaste = { [weak model] in model?.canSimulatePaste ?? false }
@@ -98,11 +99,10 @@ final class SnippetsController: ObservableObject {
     }
 
     @discardableResult
-    private func insert(_ snippet: Snippet, deleting deleteCount: Int) -> SnippetInsertion.Method {
+    private func insert(_ snippet: Snippet, deleting deleteCount: Int) -> SnippetInserter.Method {
         let text = placeholders.expand(snippet.text)
-        return SnippetInsertion.run(text: text, deleteCount: deleteCount, canPaste: canSimulatePaste(),
-                                    restoreDelay: SnippetInsertion.restoreDelay(electron: isElectronFrontmost()),
-                                    driver: driver)
+        return inserter.run(text: text, deleteCount: deleteCount, canPaste: canSimulatePaste(),
+                            restoreDelay: SnippetInserter.restoreDelay(electron: isElectronFrontmost()))
     }
 
     func setExpansion(_ on: Bool) throws {

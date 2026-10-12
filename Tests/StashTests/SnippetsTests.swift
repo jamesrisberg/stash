@@ -20,7 +20,14 @@ final class SnippetsTests: XCTestCase {
         func writeClipboard(_ text: String) -> Int? { log.append("write:\(text)"); changeCount += 1; return changeCount }
         func clipboardChangeCount() -> Int { changeCount }
         func restoreClipboard(_ saved: SavedClipboard) { log.append("restore") }
-        func after(_ seconds: TimeInterval, _ work: @escaping () -> Void) { work() }
+        /// Off: scheduled work runs at once. On: it waits for `runNext`/`runAll`.
+        var deferred = false
+        var pending: [() -> Void] = []
+        func after(_ seconds: TimeInterval, _ work: @escaping () -> Void) {
+            if deferred { pending.append(work) } else { work() }
+        }
+        func runNext() { if !pending.isEmpty { pending.removeFirst()() } }
+        func runAll() { while !pending.isEmpty { runNext() } }
     }
 
     private var pasteboard: NSPasteboard!
@@ -39,7 +46,7 @@ final class SnippetsTests: XCTestCase {
         snippets = SnippetsController(model: model, driver: driver, alfredFolder: root.appending(path: "no-alfred"))
         snippets.isTrusted = { [unowned self] in self.trusted }
         snippets.canSimulatePaste = { [unowned self] in self.canPaste }
-        snippets.schedule = { _, work in work() }
+        snippets.schedule = { [unowned self] delay, work in self.driver.after(delay) { MainActor.assumeIsolated { work() } } }
         snippets.placeholders = SnippetPlaceholders(now: { Date(timeIntervalSince1970: 1_791_731_045) },
                                                     clipboard: { "on the clipboard" },
                                                     locale: Locale(identifier: "en_US"), timeZone: TimeZone(identifier: "UTC")!)
@@ -228,6 +235,20 @@ final class SnippetsTests: XCTestCase {
         type("sig", context: .init(secureInput: false, frontmostBundleID: AppModel.bundleID))
         type("sig", context: .init(secureInput: true, frontmostBundleID: "com.example.editor"))
         XCTAssertTrue(driver.log.isEmpty)
+    }
+
+    /// `snippets insert` right after an expansion: the clipboard restored is the user's.
+    func testAnInsertRightAfterAnExpansionReusesTheSavedClipboard() throws {
+        try model.updateSettings(try model.settings.applying(["snippetExpansion": "on"]))
+        driver.deferred = true
+        type("tdy")
+        driver.runNext()                     // the expansion runs; its paste is next
+        driver.runNext()                     // paste; restore pending
+        _ = cli("insert", "id=sig")
+        driver.pending.removeLast()()        // the insert, before the expansion's restore is due
+        driver.runAll()
+        XCTAssertEqual(driver.log.filter { $0 == "save" }.count, 1)
+        XCTAssertEqual(driver.log.filter { $0 == "restore" }.count, 1)
     }
 
     // MARK: - The system driver's clipboard half (private pasteboard; no key events)

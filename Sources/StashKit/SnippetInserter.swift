@@ -39,7 +39,12 @@ public protocol SnippetInsertionDriver: AnyObject {
 /// clipboard, pastes it, then gives the clipboard back. When pasting is not possible (a
 /// private pasteboard, a clipboard too large to hold, a failed write or ⌘V) it types the text
 /// instead.
-public enum SnippetInsertion {
+///
+/// One restore is pending at a time. A snippet inserted while the previous one's restore is
+/// still due reuses the clipboard saved for it (the clipboard now holds the previous snippet,
+/// not the user's copy) and replaces its restore, so back-to-back snippets still end with the
+/// user's clipboard. A copy the user makes in between is what is saved and given back instead.
+public final class SnippetInserter {
     public enum Method: Equatable, Sendable { case paste, type }
 
     /// Lets the deletes land before the paste or the typing.
@@ -52,27 +57,55 @@ public enum SnippetInsertion {
     /// restore waits and only happens if the clipboard still holds the snippet.
     public static func restoreDelay(electron: Bool) -> TimeInterval { electron ? 3.0 : 0.3 }
 
+    private struct PendingRestore {
+        var saved: SavedClipboard
+        /// The change count after the latest snippet write.
+        var written: Int
+        var generation: Int
+    }
+
+    public let driver: SnippetInsertionDriver
+    private var pending: PendingRestore?
+    private var generation = 0
+
+    public init(driver: SnippetInsertionDriver) { self.driver = driver }
+
     /// Starts the sequence and returns the method it chose; the paste, typing and restore
     /// happen on the driver's clock.
     @discardableResult
-    public static func run(text: String, deleteCount: Int, canPaste: Bool, restoreDelay: TimeInterval,
-                           driver: SnippetInsertionDriver) -> Method {
+    public func run(text: String, deleteCount: Int, canPaste: Bool, restoreDelay: TimeInterval) -> Method {
+        let driver = self.driver
         if deleteCount > 0 { driver.postBackspaces(deleteCount) }
-        guard canPaste, let saved = driver.saveClipboard(), let written = driver.writeClipboard(text) else {
-            driver.after(keySettle) { _ = driver.type(text) }
+        guard canPaste, let saved = clipboardToGiveBack(), let written = driver.writeClipboard(text) else {
+            driver.after(Self.keySettle) { _ = driver.type(text) }
             return .type
         }
-        driver.after(keySettle) {
+        generation += 1
+        let mine = generation
+        pending = PendingRestore(saved: saved, written: written, generation: mine)
+        driver.after(Self.keySettle) { [weak self] in
             guard driver.postPaste() else {
+                if self?.pending?.generation == mine { self?.pending = nil }
                 driver.restoreClipboard(saved)
                 _ = driver.type(text)
                 return
             }
-            driver.after(restoreDelay) {
+            driver.after(restoreDelay) { [weak self] in
+                // A later snippet replaced this restore; it gives the clipboard back itself.
+                guard let self, self.pending?.generation == mine else { return }
+                self.pending = nil
                 // Only if the snippet is still what is on the clipboard: a copy made since wins.
                 if driver.clipboardChangeCount() == written { driver.restoreClipboard(saved) }
             }
         }
         return .paste
+    }
+
+    /// The pending restore's clipboard while the clipboard still holds the last snippet, else
+    /// the clipboard as it is now (nil when it is too large to hold).
+    private func clipboardToGiveBack() -> SavedClipboard? {
+        if let pending, driver.clipboardChangeCount() == pending.written { return pending.saved }
+        pending = nil
+        return driver.saveClipboard()
     }
 }

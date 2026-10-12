@@ -47,20 +47,24 @@ final class SnippetInsertionTests: XCTestCase {
     }
 
     private var driver: FakeDriver!
+    private var inserter: SnippetInserter!
 
-    override func setUp() { driver = FakeDriver() }
+    override func setUp() {
+        driver = FakeDriver()
+        inserter = SnippetInserter(driver: driver)
+    }
 
     @discardableResult
     private func run(_ text: String, delete: Int, canPaste: Bool = true, restoreDelay: TimeInterval = 0.3)
-        -> SnippetInsertion.Method {
-        SnippetInsertion.run(text: text, deleteCount: delete, canPaste: canPaste, restoreDelay: restoreDelay, driver: driver)
+        -> SnippetInserter.Method {
+        inserter.run(text: text, deleteCount: delete, canPaste: canPaste, restoreDelay: restoreDelay)
     }
 
     func testPastesThenRestoresTheClipboard() {
         XCTAssertEqual(run("Kind regards", delete: 3), .paste)
         driver.runAll()
         XCTAssertEqual(driver.log, ["backspace×3", "save", "write:Kind regards",
-                                    "wait \(SnippetInsertion.keySettle)", "paste", "wait 0.3", "restore"])
+                                    "wait \(SnippetInserter.keySettle)", "paste", "wait 0.3", "restore"])
         XCTAssertEqual(driver.clipboardText, "mine", "the user's clipboard is back")
     }
 
@@ -84,7 +88,7 @@ final class SnippetInsertionTests: XCTestCase {
     func testTypesWhenPastingIsNotPossible() {
         XCTAssertEqual(run("Kind regards", delete: 3, canPaste: false), .type)
         driver.runAll()
-        XCTAssertEqual(driver.log, ["backspace×3", "wait \(SnippetInsertion.keySettle)", "type:Kind regards"])
+        XCTAssertEqual(driver.log, ["backspace×3", "wait \(SnippetInserter.keySettle)", "type:Kind regards"])
         XCTAssertEqual(driver.clipboardText, "mine", "the clipboard is never touched")
     }
 
@@ -92,7 +96,7 @@ final class SnippetInsertionTests: XCTestCase {
         driver.canSave = false
         XCTAssertEqual(run("Kind regards", delete: 3), .type)
         driver.runAll()
-        XCTAssertEqual(driver.log, ["backspace×3", "save", "wait \(SnippetInsertion.keySettle)", "type:Kind regards"])
+        XCTAssertEqual(driver.log, ["backspace×3", "save", "wait \(SnippetInserter.keySettle)", "type:Kind regards"])
     }
 
     func testAFailedPasteRestoresAtOnceAndTypesInstead() {
@@ -100,12 +104,57 @@ final class SnippetInsertionTests: XCTestCase {
         run("Kind regards", delete: 3)
         driver.runAll()
         XCTAssertEqual(driver.log, ["backspace×3", "save", "write:Kind regards",
-                                    "wait \(SnippetInsertion.keySettle)", "paste", "restore", "type:Kind regards"])
+                                    "wait \(SnippetInserter.keySettle)", "paste", "restore", "type:Kind regards"])
         XCTAssertEqual(driver.clipboardText, "mine")
     }
 
     func testRestoreDelayIsLongerForElectronApps() {
-        XCTAssertEqual(SnippetInsertion.restoreDelay(electron: false), 0.3)
-        XCTAssertEqual(SnippetInsertion.restoreDelay(electron: true), 3.0)
+        XCTAssertEqual(SnippetInserter.restoreDelay(electron: false), 0.3)
+        XCTAssertEqual(SnippetInserter.restoreDelay(electron: true), 3.0)
+    }
+
+    // MARK: - Back to back
+
+    /// A second snippet before the first one's restore: the clipboard saved for the first (the
+    /// user's) is reused, not the first snippet's text, and only the last restore runs.
+    func testBackToBackInsertsGiveBackTheUsersClipboard() {
+        run("first", delete: 3)
+        driver.pending.removeFirst().work()          // first paste; its restore is now pending
+        run("second", delete: 3)
+        driver.runAll()
+        XCTAssertEqual(driver.log.filter { $0 == "save" }.count, 1, "the user's clipboard is saved once")
+        XCTAssertEqual(driver.log.filter { $0 == "restore" }.count, 1, "the first restore was replaced")
+        XCTAssertEqual(driver.clipboardText, "mine")
+    }
+
+    func testBackToBackRestoresRunInEitherOrderAndStillEndWithTheUsersClipboard() {
+        run("first", delete: 3, restoreDelay: 3.0)
+        driver.pending.removeFirst().work()          // first paste, 3 s restore pending
+        run("second", delete: 3, restoreDelay: 0.3)
+        driver.pending.removeFirst().work()          // the first's stale restore runs late: nothing
+        XCTAssertFalse(driver.log.contains("restore"))
+        driver.runAll()
+        XCTAssertEqual(driver.clipboardText, "mine")
+    }
+
+    func testAUserCopyBetweenInsertsIsWhatComesBack() {
+        run("first", delete: 3)
+        driver.pending.removeFirst().work()          // first paste; restore pending
+        driver.changeCount += 1                      // the user copies
+        driver.clipboard = [[PasteboardEntry(type: "public.utf8-plain-text", data: Data("newer".utf8))]]
+        run("second", delete: 3)
+        driver.runAll()
+        XCTAssertEqual(driver.clipboardText, "newer")
+    }
+
+    func testAfterARestoreTheNextInsertSavesAfresh() {
+        run("first", delete: 3)
+        driver.runAll()
+        driver.clipboard = [[PasteboardEntry(type: "public.utf8-plain-text", data: Data("later".utf8))]]
+        driver.changeCount += 1
+        run("second", delete: 3)
+        driver.runAll()
+        XCTAssertEqual(driver.log.filter { $0 == "save" }.count, 2)
+        XCTAssertEqual(driver.clipboardText, "later")
     }
 }

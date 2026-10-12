@@ -14,6 +14,9 @@ public struct StashSettings: Codable, Equatable, Sendable {
     /// `text-feed` sources (e.g. "Dictation") whose items `feed add` does not record. Empty
     /// (the default) shows every source.
     public var ignoredFeedSources: [String] = []
+    /// Typed snippet keywords expand in place (needs Accessibility). Off by default: while
+    /// Alfred is still expanding the same keywords, both would.
+    public var snippetExpansion: Bool = false
 
     public init() {}
 
@@ -43,6 +46,7 @@ public struct StashSettings: Codable, Equatable, Sendable {
         ignoreList = (try? c.decodeIfPresent([String].self, forKey: .ignoreList)) ?? d.ignoreList
         pasteOnEnter = (try? c.decodeIfPresent(Bool.self, forKey: .pasteOnEnter)) ?? d.pasteOnEnter
         ignoredFeedSources = (try? c.decodeIfPresent([String].self, forKey: .ignoredFeedSources)) ?? d.ignoredFeedSources
+        snippetExpansion = (try? c.decodeIfPresent(Bool.self, forKey: .snippetExpansion)) ?? d.snippetExpansion
     }
 
     public enum SettingsError: Error, CustomStringConvertible, Equatable {
@@ -55,7 +59,8 @@ public struct StashSettings: Codable, Equatable, Sendable {
     /// The `settings get` form, matching the schema's types (`ignoreList` is a comma-separated string).
     public var json: [String: Any] {
         ["historyCap": historyCap, "pollIntervalMs": pollIntervalMs, "ignoreList": ignoreList.joined(separator: ","),
-         "pasteOnEnter": pasteOnEnter, "ignoredFeedSources": ignoredFeedSources.joined(separator: ",")]
+         "pasteOnEnter": pasteOnEnter, "ignoredFeedSources": ignoredFeedSources.joined(separator: ","),
+         "snippetExpansion": snippetExpansion]
     }
 
     /// Returns a copy with string values from `settings set` applied. Validates every value
@@ -79,16 +84,25 @@ public struct StashSettings: Codable, Equatable, Sendable {
             case "ignoredFeedSources":
                 s.ignoredFeedSources = value.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             case "pasteOnEnter":
-                switch value.lowercased() {
-                case "1", "true", "yes", "on": s.pasteOnEnter = true
-                case "0", "false", "no", "off": s.pasteOnEnter = false
-                default: throw SettingsError.invalid("pasteOnEnter must be true or false")
-                }
+                guard let on = Self.bool(value) else { throw SettingsError.invalid("pasteOnEnter must be true or false") }
+                s.pasteOnEnter = on
+            case "snippetExpansion":
+                guard let on = Self.bool(value) else { throw SettingsError.invalid("snippetExpansion must be true or false") }
+                s.snippetExpansion = on
             default:
                 throw SettingsError.invalid("unknown setting \(key)")
             }
         }
         return s
+    }
+
+    /// A wire boolean: 1/true/yes/on or 0/false/no/off, any case; nil otherwise.
+    public static func bool(_ value: String) -> Bool? {
+        switch value.lowercased() {
+        case "1", "true", "yes", "on": return true
+        case "0", "false", "no", "off": return false
+        default: return nil
+        }
     }
 }
 

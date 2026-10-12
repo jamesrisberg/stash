@@ -38,7 +38,7 @@ public protocol SnippetInsertionDriver: AnyObject {
 /// Replaces a typed keyword with a snippet's text: deletes the keyword, puts the text on the
 /// clipboard, pastes it, then gives the clipboard back. When pasting is not possible (a
 /// private pasteboard, a clipboard too large to hold, a failed write or ⌘V) it types the text
-/// instead.
+/// instead, giving a borrowed clipboard back at once.
 ///
 /// One restore is pending at a time. A snippet inserted while the previous one's restore is
 /// still due reuses the clipboard saved for it (the clipboard now holds the previous snippet,
@@ -76,12 +76,20 @@ public final class SnippetInserter {
     public func run(text: String, deleteCount: Int, canPaste: Bool, restoreDelay: TimeInterval) -> Method {
         let driver = self.driver
         if deleteCount > 0 { driver.postBackspaces(deleteCount) }
-        guard canPaste, let saved = clipboardToGiveBack(), let written = driver.writeClipboard(text) else {
+        guard canPaste, let saved = clipboardToGiveBack() else {
             driver.after(Self.keySettle) { _ = driver.type(text) }
             return .type
         }
         generation += 1
         let mine = generation
+        guard let written = driver.writeClipboard(text) else {
+            // The write may already have cleared the clipboard: give it back now, and drop any
+            // pending restore (`generation` moved on, so its timer does nothing).
+            pending = nil
+            driver.restoreClipboard(saved)
+            driver.after(Self.keySettle) { _ = driver.type(text) }
+            return .type
+        }
         pending = PendingRestore(saved: saved, written: written, generation: mine)
         driver.after(Self.keySettle) { [weak self] in
             guard driver.postPaste() else {

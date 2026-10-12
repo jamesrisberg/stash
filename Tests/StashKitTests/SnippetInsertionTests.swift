@@ -12,6 +12,7 @@ final class SnippetInsertionTests: XCTestCase {
         var changeCount = 10
         var canSave = true
         var pasteWorks = true
+        var writeWorks = true
         var pending: [(delay: TimeInterval, work: () -> Void)] = []
 
         func postBackspaces(_ count: Int) { log.append("backspace×\(count)") }
@@ -23,6 +24,12 @@ final class SnippetInsertionTests: XCTestCase {
         }
         func writeClipboard(_ text: String) -> Int? {
             log.append("write:\(text)")
+            guard writeWorks else {
+                // A failed write has already cleared the clipboard, as NSPasteboard's does.
+                clipboard = []
+                changeCount += 1
+                return nil
+            }
             clipboard = [[PasteboardEntry(type: "public.utf8-plain-text", data: Data(text.utf8))]]
             changeCount += 1
             return changeCount
@@ -106,6 +113,31 @@ final class SnippetInsertionTests: XCTestCase {
         XCTAssertEqual(driver.log, ["backspace×3", "save", "write:Kind regards",
                                     "wait \(SnippetInserter.keySettle)", "paste", "restore", "type:Kind regards"])
         XCTAssertEqual(driver.clipboardText, "mine")
+    }
+
+    func testAFailedWriteRestoresAtOnceAndTypes() {
+        driver.writeWorks = false
+        XCTAssertEqual(run("Kind regards", delete: 3), .type)
+        driver.runAll()
+        XCTAssertEqual(driver.log, ["backspace×3", "save", "write:Kind regards", "restore",
+                                    "wait \(SnippetInserter.keySettle)", "type:Kind regards"])
+        XCTAssertEqual(driver.clipboardText, "mine")
+    }
+
+    func testAFailedWriteAfterAPendingRestoreGivesBackTheUsersClipboard() {
+        run("first", delete: 3)
+        driver.pending.removeFirst().work()          // first paste; restore pending
+        driver.writeWorks = false
+        run("second", delete: 3)
+        driver.runAll()
+        XCTAssertEqual(driver.clipboardText, "mine")
+        XCTAssertEqual(driver.log.filter { $0 == "restore" }.count, 1, "restored once, at the failure")
+        driver.writeWorks = true
+        driver.clipboard = [[PasteboardEntry(type: "public.utf8-plain-text", data: Data("later".utf8))]]
+        driver.changeCount += 1
+        run("third", delete: 3)
+        driver.runAll()
+        XCTAssertEqual(driver.clipboardText, "later", "nothing stale is reused after the failure")
     }
 
     func testRestoreDelayIsLongerForElectronApps() {

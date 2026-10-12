@@ -15,6 +15,13 @@ final class SnippetsController: ObservableObject {
     static let expansionDelay: TimeInterval = 0.02
     /// Gives MacHUD's search bar time to close and hand focus back before `insert` pastes.
     static let insertDelay: TimeInterval = 0.12
+    /// MacHUD, whose search bar finds snippets by keyword: typing one there searches, it must
+    /// not expand.
+    static let machudBundleID = "com.jrisberg.machud"
+    /// Apps where keywords never expand, beside the `ignoreList` setting: Stash itself (a
+    /// keyword typed into the Snippets editor) and MacHUD. For expansion only; clipboard
+    /// recording is unaffected.
+    static let expansionIgnored: Set<String> = [AppModel.bundleID, machudBundleID]
 
     let store: SnippetStore
     let engine = SnippetExpansionEngine()
@@ -84,9 +91,8 @@ final class SnippetsController: ObservableObject {
 
     private func apply(_ settings: StashSettings) {
         engine.isEnabled = settings.snippetExpansion
-        // Never in the ignored apps (password managers), nor in Stash's own windows, where a
-        // keyword is being typed into the Snippets editor.
-        engine.ignoredBundleIDs = Set(settings.ignoreList).union([AppModel.bundleID])
+        // Never in the ignored apps (password managers), Stash or MacHUD.
+        engine.ignoredBundleIDs = Set(settings.ignoreList).union(Self.expansionIgnored)
         tap?.setEnabled(settings.snippetExpansion)
     }
 

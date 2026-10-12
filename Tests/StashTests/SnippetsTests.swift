@@ -229,10 +229,12 @@ final class SnippetsTests: XCTestCase {
         XCTAssertTrue(driver.log.contains("paste"))
     }
 
-    func testStashsIgnoredAppsAndStashItselfNeverExpand() throws {
+    /// MacHUD's search bar finds snippets by keyword: typing one there must not expand it.
+    func testStashsIgnoredAppsStashAndMacHUDNeverExpand() throws {
         try model.updateSettings(try model.settings.applying(["snippetExpansion": "on", "ignoreList": "com.example.vault"]))
         type("sig", context: .init(secureInput: false, frontmostBundleID: "com.example.vault"))
         type("sig", context: .init(secureInput: false, frontmostBundleID: AppModel.bundleID))
+        type("sig", context: .init(secureInput: false, frontmostBundleID: SnippetsController.machudBundleID))
         type("sig", context: .init(secureInput: true, frontmostBundleID: "com.example.editor"))
         XCTAssertTrue(driver.log.isEmpty)
     }
@@ -249,6 +251,14 @@ final class SnippetsTests: XCTestCase {
         driver.runAll()
         XCTAssertEqual(driver.log.filter { $0 == "save" }.count, 1)
         XCTAssertEqual(driver.log.filter { $0 == "restore" }.count, 1)
+    }
+
+    // MARK: - Mapping a key's target process
+
+    func testTheTargetProcessNamesTheApp() {
+        XCTAssertEqual(SnippetKeyTap.bundleID(forPID: getpid(), frontmost: "com.example.editor"), AppModel.bundleID)
+        XCTAssertEqual(SnippetKeyTap.bundleID(forPID: 0, frontmost: "com.example.editor"), "com.example.editor",
+                       "no target process: the frontmost app")
     }
 
     // MARK: - The system driver's clipboard half (private pasteboard; no key events)

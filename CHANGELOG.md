@@ -6,6 +6,20 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Snippets: keep reusable text with a name, a keyword and a collection, and manage them in the
+  new Snippets window (menu bar icon > Snippets…). `{date}`, `{time}` and `{clipboard}` are filled
+  in when a snippet is used.
+- Import your snippets from Alfred (Snippets window or menu bar icon > Import Snippets from
+  Alfred). Collections, keyword prefixes and suffixes come along, and importing again updates
+  the snippets instead of adding copies.
+- Keyword expansion: type a snippet's keyword anywhere and it is replaced by the snippet, and your
+  clipboard is put back afterwards. It is off until you switch it on (Expand Snippet Keywords),
+  so it does not clash with Alfred. It needs Accessibility, and never runs in password fields or
+  the apps Stash ignores.
+- MacHUD's search bar can find snippets and paste them into the app you are in (`stash snippets
+  list`, `stash snippets insert`).
+
 ## [0.3.0] - 2026-10-02
 
 ### Added

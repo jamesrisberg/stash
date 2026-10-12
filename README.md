@@ -6,7 +6,8 @@ A clipboard manager for macOS, and a sibling of [Sift](../sift) in the MacHUD fa
 
 Stash lives in the menu bar (no Dock icon) and keeps a searchable history of what you copy:
 text, rich text, images, files and links, with pinned clips and a compact strip of the last
-five. On its own it shows its panel from the menu bar icon or ⌃⌥V; inside MacHUD it is a hover
+five. It also keeps your text snippets, which MacHUD's search bar can insert and which can
+expand as you type their keyword. On its own it shows its panel from the menu bar icon or ⌃⌥V; inside MacHUD it is a hover
 button in the tool dock (order 2, after Scratch) whose panel slides out while the pointer is
 over it. It also offers a desktop widget, Latest Clips, that MacHUD can place on your desktop.
 
@@ -43,13 +44,36 @@ the `stash` command onto your PATH and launches it.
 - The compact strip shows the five newest clips side by side, with the same clicks. Switch
   with the button in the corner or the menu bar menu.
 
-The menu bar icon's menu has Show Stash, Compact Strip, Pause Recording, Enter Pastes into
-Previous App, Grant Accessibility…, Clear History (Keep Pinned), Reveal History Folder and Quit.
+The menu bar icon's menu has Show Stash, Compact Strip, Snippets…, Pause Recording, Enter Pastes
+into Previous App, Expand Snippet Keywords, Import Snippets from Alfred, Grant Accessibility…,
+Clear History (Keep Pinned), Reveal History Folder and Quit.
 In the MacHUD dock, hover the button to see the panel. Stash takes no drops; its panel is a
 drag source (`providesDrag`).
 
 Pasting sends a simulated ⌘V, which needs Accessibility (menu bar icon > Grant
 Accessibility…). Without it, Stash copies the clip and shows a hint instead.
+
+## Snippets
+
+A snippet is a piece of text you reuse, with a name, an optional keyword and a collection.
+Open **Snippets…** from the menu bar icon to see them by collection, add (+), edit and delete
+them, and add collections. In MacHUD's search bar, type a snippet's name, keyword or collection
+and pick it to paste it into the app you are in.
+
+- **Placeholders**: `{date}` and `{time}` become the date and time in your Mac's medium format
+  (as in Alfred), `{clipboard}` the text on your clipboard. Anything else in braces is inserted
+  as typed.
+- **Import from Alfred**: the Snippets window's button, or **Import Snippets from Alfred** in the
+  menu, reads Alfred's snippets (collections, names, keywords with each collection's prefix and
+  suffix, and "don't auto-expand"). Importing again updates the snippets it imported before
+  instead of adding copies, and keeps snippets you made in Stash. Alfred's files are only read.
+- **Expansion**: with **Expand Snippet Keywords** on (in the menu, the Snippets window or
+  the `snippetExpansion` setting), typing a keyword anywhere replaces it with its snippet: Stash
+  deletes the keyword, pastes the text and puts your clipboard back. It is off by default: turn
+  off Alfred's snippet expansion first, or both expand the same keyword. It needs Accessibility,
+  the permission pasting already uses. It never runs in password fields (secure input), in the
+  apps on your ignore list, or in Stash's own windows, and the pasted snippet is never added to
+  your clipboard history.
 
 ## Latest Clips widget
 
@@ -70,7 +94,8 @@ screen. Clips from password managers and concealed copies are never recorded in 
 ## Privacy
 
 Nothing leaves your Mac. History is stored in `~/Library/Application Support/Stash`
-(`history.json` plus `blobs/` for images and rich text, `preferences.json` and `frames.json`).
+(`history.json` plus `blobs/` for images and rich text, `snippets.json`, `preferences.json` and
+`frames.json`).
 Stash does not record a copy when:
 
 - secure input is on (a password field has focus; `IsSecureEventInputEnabled()`),
@@ -80,14 +105,21 @@ Stash does not record a copy when:
   ([nspasteboard.org](http://nspasteboard.org) types),
 - recording is paused from the menu.
 
+Snippet expansion watches what you type only while it is switched on, keeps no more than the
+last 64 characters in memory, and forgets them on a click, an app switch, a navigation key or a
+shortcut. It reads nothing while secure input is on or an ignored app is in front. A snippet's
+paste borrows the clipboard (marked so clipboard managers skip it) and gives it back unless you
+copied something else in the meantime. The snippet list over the socket never shows what is on
+your clipboard: a `{clipboard}` placeholder stays as typed in previews.
+
 ## MacHUD contract
 
 Panel `history`, kind `hover`, socket `stash`, plus the widget type `clips` (kind `widget`, served
 through HUDKit's `HUDWidgetHost`; see [docs/CONTRACT.md](docs/CONTRACT.md)). Verbs: the HUDKit set (`hello`, `state`,
 `subscribe`, `panel show|hide|toggle|frame|mode`, `settings get|set|schema`, `action`, `quit`)
 `widget create|update|remove|list|sync|edit|reveal|schema`, plus `action copy`, `copy-clip`,
-`paste`, `search`, `list`, `pin`, `delete` and `clear`. Full
-reference: [docs/CONTRACT.md](docs/CONTRACT.md).
+`paste`, `search`, `list`, `pin`, `delete` and `clear`, and `snippets list|insert|import-alfred|expansion`.
+Full reference: [docs/CONTRACT.md](docs/CONTRACT.md).
 
 ```sh
 stash list                    # history with indexes, newest first
@@ -96,6 +128,10 @@ stash paste 2                 # paste the second newest clip into the frontmost 
 stash search invoice
 stash panel mode id=history compact
 stash watch                   # state events (badge = clip count)
+stash snippets list query=sig # snippets by name, keyword or collection, best first
+stash snippets insert id=<id> # paste a snippet into the frontmost app
+stash snippets import-alfred dry-run=1   # count Alfred's snippets without importing
+stash snippets expansion on   # expand keywords as you type
 ```
 
 ## Settings
@@ -106,6 +142,7 @@ stash watch                   # state events (badge = clip count)
 | `pollIntervalMs` | int | `250` | how often the pasteboard is checked (50-5000) |
 | `ignoreList` | string | password managers | comma-separated bundle ids whose copies are never recorded |
 | `pasteOnEnter` | bool | `true` | ↩ pastes into the previous app; off, it only copies |
+| `snippetExpansion` | bool | `false` | typed snippet keywords expand in place (needs Accessibility) |
 
 Set them in MacHUD's settings window (which reads `settings.json`) or with
 `stash settings set key=value`. Stored in `~/Library/Application Support/Stash/preferences.json`.
@@ -121,12 +158,14 @@ STASH_INTEGRATION=1 swift test     # also the one general-pasteboard test (saves
 ./install.sh                       # build, install to /Applications, link the CLI, launch
 build/Stash.app/Contents/MacOS/Stash --demo --snapshot /tmp/full.png --snapshot-quit
 build/Stash.app/Contents/MacOS/Stash --demo --snapshot /tmp/strip.png --snapshot-mode compact --snapshot-quit
+build/Stash.app/Contents/MacOS/Stash --demo --snapshot-snippets /tmp/snippets.png --snapshot-quit
 ```
 
 `--snapshot <png>` writes a picture of the panel without Screen Recording permission. It
 takes `--snapshot-mode compact`, `--snapshot-query <q>` and `--snapshot-hover <n>` (draws
 clip n, 1 = newest, as hovered), and quits after with `--snapshot-quit`. `--demo` fills a
-throwaway history with sample clips on a private pasteboard. `--snapshot-widgets <dir>` writes
+throwaway history with sample clips and snippets on a private pasteboard. `--snapshot-snippets
+<png>` pictures the Snippets window. `--snapshot-widgets <dir>` writes
 the Latest Clips widget at each size (`clips-small.png`, `clips-medium.png`, and `-pinned`
 variants) the same way.
 
@@ -135,18 +174,22 @@ variants) the same way.
 [VERSION](VERSION); changes are in [CHANGELOG.md](CHANGELOG.md).
 
 Layout: `Sources/StashKit` is the UI-free core (`ClipboardWatcher`, `Clip`, `ClipReader`,
-`ClipStore`, `StashSettings`, `EventThrottle`, `ClipsWidgetSelection`). `Sources/Stash` is the app (bundle files in
+`ClipStore`, `StashSettings`, `EventThrottle`, `ClipsWidgetSelection`, and for snippets
+`SnippetStore`, `AlfredSnippetImporter`, `SnippetPlaceholders`, `SnippetSearch`,
+`SnippetExpansionEngine` and `SnippetInsertion`). `Sources/Stash` is the app (bundle files in
 `Sources/Stash/Resources`), `Sources/StashCLI` the `stash` CLI, and `Tests/` covers StashKit,
-the app's host logic (click-copy, hover chrome, parking, frames, environment, the widget) and the manifest.
+the app's host logic (click-copy, hover chrome, parking, frames, environment, the widget, the
+`snippets` verb) and the manifest. No test posts a key event: expansion and insertion run
+against fake drivers.
 
 ## Isolation env vars for testing
 
 | Variable | Effect |
 |---|---|
-| `STASH_HOME` | base directory for history, blobs, preferences and frames (default `~/Library/Application Support/Stash`). |
+| `STASH_HOME` | base directory for history, blobs, snippets, preferences and frames (default `~/Library/Application Support/Stash`). |
 | `STASH_SOCKET` | socket name or absolute path (default `stash`); the CLI honours it too |
 | `STASH_NO_HOTKEYS` | `1` skips registering ⌃⌥V |
-| `STASH_PASTEBOARD` | watch and write a private named pasteboard instead of the general one; simulated ⌘V is disabled then |
+| `STASH_PASTEBOARD` | watch and write a private named pasteboard instead of the general one; simulated ⌘V is disabled then (a snippet insert copies only, and an expansion types instead of pasting) |
 
 ```sh
 STASH_HOME=$(mktemp -d) STASH_SOCKET=stash-test STASH_PASTEBOARD=stash-test STASH_NO_HOTKEYS=1 \

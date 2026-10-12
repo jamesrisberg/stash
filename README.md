@@ -191,6 +191,7 @@ against fake drivers.
 | `STASH_HOME` | base directory for history, blobs, snippets, preferences and frames (default `~/Library/Application Support/Stash`). |
 | `STASH_SOCKET` | socket name or absolute path (default `stash`); the CLI honours it too |
 | `STASH_NO_HOTKEYS` | `1` skips registering ⌃⌥V |
+| `STASH_LOG_KEY_TARGET` | `1` logs, while snippet expansion is on, the app each key goes to (never what was typed) |
 | `STASH_PASTEBOARD` | watch and write a private named pasteboard instead of the general one; simulated ⌘V is disabled then (a snippet insert copies only, and an expansion types instead of pasting) |
 
 ```sh

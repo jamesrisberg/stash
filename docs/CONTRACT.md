@@ -110,9 +110,11 @@ snippet's `id` is Alfred's uid. An unreadable file is moved aside (`snippets.unr
 
 Expansion, while `snippetExpansion` is on: a session event tap (`.defaultTap`, which the
 Accessibility permission allows; every event passes through unchanged) runs on its own thread
-at the tail of the session taps (`tailAppendEventTap`, so it sees only keys other taps let
-through) and hands each key, with the process it targets (`eventTargetUnixProcessID`), to the
-main thread. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
+at the tail of the annotated session taps (`cgAnnotatedSessionEventTap`, `tailAppendEventTap`,
+so it sees only keys other taps let through, annotated with their target application) and hands
+each key, with the process it targets (`eventTargetUnixProcessID`), to the main thread. A key
+counts as typed in Stash while one of Stash's windows has the keyboard (the hover panel takes keys
+without Stash being frontmost); with no target process it goes to the frontmost app. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
 navigation keys (arrows, Home, End, Page Up/Down, Tab, Return, Escape, Forward Delete), ⌘ or ⌃
 shortcuts, Delete with any modifier, dead keys and the key after one, clicks, app switches and a
 different target app. Nothing is kept while secure input is on, an input method is the selected
@@ -125,7 +127,7 @@ nspasteboard.org transient and concealed types), posts ⌘V, and restores the pr
 pending at a time: a snippet inserted before the previous one's restore (an expansion or
 `snippets insert`) reuses the clipboard saved for it and replaces its restore. Stash types the
 text as key events instead when it cannot paste (a private pasteboard, a clipboard over 16 MB, a
-failed write). Every event Stash posts carries `eventSourceUserData` `0x53545348`, which the tap
+failed write; after a failed write the saved clipboard goes back at once). Every event Stash posts carries `eventSourceUserData` `0x53545348`, which the tap
 ignores. Without Accessibility the tap is retried every 3 s.
 
 ## Menu bar consolidation
@@ -144,6 +146,7 @@ See [menu bar consolidation](https://github.com/jamesrisberg/hudkit/blob/main/do
 | `STASH_SOCKET` | app, CLI | socket name or absolute path instead of `stash` |
 | `STASH_NO_HOTKEYS` | app | `1` skips registering ⌃⌥V |
 | `STASH_PASTEBOARD` | app | watch and write a private named pasteboard; simulated ⌘V is disabled then |
+| `STASH_LOG_KEY_TARGET` | app | `1` logs, while expansion is on, the app each key goes to (process and bundle id, never what was typed), to check attribution |
 | `STASH_INTEGRATION` | tests | `1` runs the general-pasteboard integration test |
 
 An instance with any of `STASH_HOME`, `STASH_SOCKET` or `STASH_PASTEBOARD` set is isolated: it

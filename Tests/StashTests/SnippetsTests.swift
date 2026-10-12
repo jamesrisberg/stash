@@ -159,7 +159,7 @@ final class SnippetsTests: XCTestCase {
         XCTAssertEqual(reply["updated"] as? Int, 0)
         XCTAssertEqual(reply["unchanged"] as? Int, 0)
         XCTAssertEqual(reply["skipped"] as? Int, 0)
-        XCTAssertEqual(reply["unknownPlaceholders"] as? [String: Int], ["{cursor}": 1])
+        XCTAssertEqual(reply["unknownPlaceholders"] as? [String: Int], ["cursor": 1])
         XCTAssertNil(snippets.store.snippet(id: "A1"), "a dry run changes nothing")
     }
 

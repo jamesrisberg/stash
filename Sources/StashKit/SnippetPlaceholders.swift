@@ -2,8 +2,8 @@ import Foundation
 
 /// Fills in a snippet's placeholders the way Alfred does by default: `{date}` and `{time}` in
 /// the system's medium style, `{clipboard}` as the clipboard's plain text (nothing when it
-/// holds none). Any other `{…}` is left exactly as typed; the Alfred import reports the
-/// placeholder-shaped ones (`unknownTokens`).
+/// holds none). Any other `{…}` is left exactly as typed; the Alfred import counts the
+/// placeholder-shaped ones by name (`unknownPlaceholderNames`).
 public struct SnippetPlaceholders {
     public static let supported = ["{date}", "{time}", "{clipboard}"]
 
@@ -53,15 +53,27 @@ public struct SnippetPlaceholders {
         return f.string(from: date)
     }
 
-    /// Placeholder-shaped tokens (a brace, a letter, no line break, a closing brace) other than
-    /// the supported three, each occurrence in order: `{cursor}`, `{snippet:sig}`,
-    /// `{date:short}`. Braces that do not start with a letter (JSON, code) are not counted.
-    public static func unknownTokens(in text: String) -> [String] {
+    /// Alfred's dynamic placeholder names, the only words `unknownPlaceholderNames` reports.
+    public static let alfredNames: Set<String> = [
+        "date", "time", "datetime", "isodate", "isotime", "isodatetime", "clipboard", "cursor", "random",
+        "snippet", "var", "query",
+    ]
+
+    /// The placeholder-shaped tokens (a brace, a letter, no line break, a closing brace) Stash
+    /// leaves as typed, one entry per occurrence, by name only: an Alfred placeholder's name
+    /// (`{snippet:sig}` is `snippet`, `{date:short}` is `date`), anything else `other`, so the
+    /// report never quotes a snippet's text. Braces that do not start with a letter (JSON,
+    /// code) are not counted.
+    public static func unknownPlaceholderNames(in text: String) -> [String] {
         guard text.contains("{") else { return [] }
         let range = NSRange(text.startIndex..., in: text)
-        return tokenPattern.matches(in: text, range: range).compactMap { match in
-            Range(match.range, in: text).map { String(text[$0]) }
-        }.filter { !supported.contains($0) }
+        return tokenPattern.matches(in: text, range: range).compactMap { match -> String? in
+            guard let r = Range(match.range, in: text) else { return nil }
+            let token = String(text[r])
+            guard !supported.contains(token) else { return nil }
+            let name = String(token.dropFirst().prefix { $0.isASCII && ($0.isLetter || $0.isNumber) }).lowercased()
+            return alfredNames.contains(name) ? name : "other"
+        }
     }
 
     private static let tokenPattern = try! NSRegularExpression(pattern: #"\{[A-Za-z][^{}\n]*\}"#)

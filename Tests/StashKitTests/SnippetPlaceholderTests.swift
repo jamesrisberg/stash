@@ -46,9 +46,13 @@ final class SnippetPlaceholderTests: XCTestCase {
         XCTAssertEqual(placeholders().expand(text), text)
     }
 
-    func testUnknownTokensListsPlaceholderShapedTokensOnly() {
-        let text = "{date} {cursor} {snippet:sig} {date:short} {Name} {\"k\": 2} { spaced } {} {time}"
-        XCTAssertEqual(SnippetPlaceholders.unknownTokens(in: text), ["{cursor}", "{snippet:sig}", "{date:short}", "{Name}"])
+    /// Only Alfred's placeholder names are reported, never the text inside the braces: anything
+    /// else in braces (a template's `{customer name}`) is counted as `other`.
+    func testUnknownPlaceholderNamesNeverQuoteTheSnippet() {
+        let text = "{date} {cursor} {snippet:sig} {date:short} {Customer Name} {clipboard:1} {\"k\": 2} { spaced } {} {time}"
+        XCTAssertEqual(SnippetPlaceholders.unknownPlaceholderNames(in: text), ["cursor", "snippet", "date", "other", "clipboard"])
+        XCTAssertEqual(SnippetPlaceholders.unknownPlaceholderNames(in: "{random:secret words}"), ["random"])
+        XCTAssertEqual(SnippetPlaceholders.unknownPlaceholderNames(in: "{private}"), ["other"])
     }
 
     func testClipboardIsReadOnlyWhenUsed() {

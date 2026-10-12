@@ -75,8 +75,8 @@ final class AlfredImportTests: XCTestCase {
     func testReportsUnknownPlaceholdersOnly() throws {
         try standardFixture()
         let result = try AlfredSnippetImporter(folder: folder).read()
-        XCTAssertEqual(result.unknownPlaceholders, ["{cursor}": 1, "{snippet:sig}": 1],
-                       "date, time and clipboard are supported; JSON braces are not placeholders")
+        XCTAssertEqual(result.unknownPlaceholders, ["cursor": 1, "snippet": 1],
+                       "by name only; date, time and clipboard are supported; JSON braces are not placeholders")
     }
 
     func testAMissingFolderThrows() {

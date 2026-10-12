@@ -81,8 +81,8 @@ public struct AlfredSnippetImporter {
                                       autoExpand: !(body.dontautoexpand ?? false))
                 result.snippets.append(snippet)
                 result.countsByCollection[collection, default: 0] += 1
-                for token in SnippetPlaceholders.unknownTokens(in: body.snippet) {
-                    result.unknownPlaceholders[token, default: 0] += 1
+                for name in SnippetPlaceholders.unknownPlaceholderNames(in: body.snippet) {
+                    result.unknownPlaceholders[name, default: 0] += 1
                 }
             }
         }
@@ -104,7 +104,8 @@ public struct AlfredImport: Equatable, Sendable {
     public var collections: [String] = []
     public var snippets: [Snippet] = []
     public var countsByCollection: [String: Int] = [:]
-    /// Placeholder-shaped tokens Stash does not fill in (left as typed), with how often each occurs.
+    /// Placeholders Stash does not fill in (left as typed), by Alfred placeholder name or
+    /// `other`, with how often each occurs. Never the snippet's text.
     public var unknownPlaceholders: [String: Int] = [:]
     /// `.json` files that are not readable Alfred snippets.
     public var skippedFiles = 0

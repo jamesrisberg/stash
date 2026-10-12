@@ -25,7 +25,8 @@ final class SnippetKeyTap {
     /// The tap came or went.
     var onActiveChange: ((Bool) -> Void)?
 
-    private var relay: TapRelay?
+    /// The running tap's thread. It owns the tap and tears it down itself; main only asks it
+    /// to stop.
     private var thread: TapThread?
     private var retry: Timer?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
@@ -33,7 +34,7 @@ final class SnippetKeyTap {
     private var inputMethodActive = false
     private(set) var isEnabled = false
 
-    var isActive: Bool { relay != nil }
+    var isActive: Bool { thread != nil }
 
     func setEnabled(_ on: Bool) {
         guard on != isEnabled else { return }
@@ -64,11 +65,10 @@ final class SnippetKeyTap {
     }
 
     private func install() {
-        guard relay == nil else { return }
-        if Paster.isTrusted, let relay = TapRelay(deliver: { [weak self] event in
+        guard thread == nil else { return }
+        if Paster.isTrusted, let relay = TapRelay.make(deliver: { [weak self] event in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.receive(event) } }
         }) {
-            self.relay = relay
             let thread = TapThread(relay: relay)
             thread.start()
             self.thread = thread
@@ -81,7 +81,7 @@ final class SnippetKeyTap {
         guard retry == nil else { return }
         let timer = Timer(timeInterval: 3, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.isEnabled, self.relay == nil else { return }
+                guard let self, self.isEnabled, self.thread == nil else { return }
                 self.install()
             }
         }
@@ -92,11 +92,9 @@ final class SnippetKeyTap {
     private func uninstall() {
         retry?.invalidate()
         retry = nil
-        guard let relay else { return }
-        thread?.stop()
-        relay.invalidate()
-        self.relay = nil
-        thread = nil
+        guard let thread else { return }
+        thread.stop()
+        self.thread = nil
         onActiveChange?(false)
     }
 
@@ -164,11 +162,16 @@ private final class TapRelay: @unchecked Sendable {
         case reset
     }
 
-    private(set) var port: CFMachPort?
     let deliver: @Sendable (Event) -> Void
+    /// Set once by `make`, before the tap's thread starts; only that thread uses it afterwards.
+    private(set) var port: CFMachPort?
 
-    init?(deliver: @escaping @Sendable (Event) -> Void) {
-        self.deliver = deliver
+    private init(deliver: @escaping @Sendable (Event) -> Void) { self.deliver = deliver }
+
+    /// A relay with its tap, or nil when the tap cannot be created (no Accessibility). The tap
+    /// receives nothing until `TapThread` puts its source on a run loop.
+    static func make(deliver: @escaping @Sendable (Event) -> Void) -> TapRelay? {
+        let relay = TapRelay(deliver: deliver)
         let types: [CGEventType] = [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         let callback: CGEventTapCallBack = { _, type, event, refcon in
@@ -177,10 +180,11 @@ private final class TapRelay: @unchecked Sendable {
         }
         // A filtering tap (`.defaultTap`) is what Accessibility allows; it never changes or
         // drops an event. A listen-only tap would need the separate Input Monitoring permission.
-        guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap, options: .defaultTap,
-                                           eventsOfInterest: mask, callback: callback,
-                                           userInfo: Unmanaged.passUnretained(self).toOpaque()) else { return nil }
-        self.port = port
+        guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap,
+                                           options: .defaultTap, eventsOfInterest: mask, callback: callback,
+                                           userInfo: Unmanaged.passUnretained(relay).toOpaque()) else { return nil }
+        relay.port = port
+        return relay
     }
 
     private func handle(type: CGEventType, event: CGEvent) {
@@ -198,39 +202,47 @@ private final class TapRelay: @unchecked Sendable {
             break
         }
     }
-
-    func invalidate() {
-        guard let port else { return }
-        CGEvent.tapEnable(tap: port, enable: false)
-        CFMachPortInvalidate(port)
-        self.port = nil
-    }
 }
 
-/// A thread whose run loop serves the tap.
+/// A thread whose run loop serves the tap. It holds the relay (so the tap's callback never
+/// outlives it) and, when its run loop ends, disables and invalidates the tap and removes its
+/// source itself; the main thread only asks it to stop.
 private final class TapThread: Thread, @unchecked Sendable {
-    private let source: CFRunLoopSource?
+    private let relay: TapRelay
+    private let lock = NSLock()
     private var runLoop: CFRunLoop?
-    private let ready = DispatchSemaphore(value: 0)
+    private var stopRequested = false
 
     init(relay: TapRelay) {
-        source = relay.port.map { CFMachPortCreateRunLoopSource(nil, $0, 0) }
+        self.relay = relay
         super.init()
         name = "xyz.machud.stash.snippet-tap"
         qualityOfService = .userInteractive
     }
 
     override func main() {
-        runLoop = CFRunLoopGetCurrent()
-        if let source { CFRunLoopAddSource(runLoop, source, .commonModes) }
-        ready.signal()
-        CFRunLoopRun()
+        guard let port = relay.port else { return }
+        let loop = CFRunLoopGetCurrent()
+        let source = CFMachPortCreateRunLoopSource(nil, port, 0)
+        CFRunLoopAddSource(loop, source, .commonModes)
+        lock.withLock { runLoop = loop }
+        // Runs until asked to stop; the flag also catches a stop that came before the run
+        // loop was running.
+        while !lock.withLock({ stopRequested }) {
+            CFRunLoopRunInMode(.defaultMode, 1, false)
+        }
+        CGEvent.tapEnable(tap: port, enable: false)
+        CFRunLoopRemoveSource(loop, source, .commonModes)
+        CFMachPortInvalidate(port)
     }
 
-    /// Stops the run loop (the thread then ends).
+    /// Asks the thread to stop. Safe from any thread: it sets a flag under the lock and wakes
+    /// the run loop with `CFRunLoopStop`.
     func stop() {
-        ready.wait()
-        if let runLoop, let source { CFRunLoopRemoveSource(runLoop, source, .commonModes) }
-        if let runLoop { CFRunLoopStop(runLoop) }
+        let loop: CFRunLoop? = lock.withLock {
+            stopRequested = true
+            return runLoop
+        }
+        if let loop { CFRunLoopStop(loop) }
     }
 }

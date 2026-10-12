@@ -109,18 +109,24 @@ keyword, text, collection, autoExpand}]}`), rewritten atomically on every change
 snippet's `id` is Alfred's uid. An unreadable file is moved aside (`snippets.unreadable-<time>.json`).
 
 Expansion, while `snippetExpansion` is on: a session event tap (`.defaultTap`, which the
-Accessibility permission allows; every event passes through unchanged) feeds key presses to
-StashKit's `SnippetExpansionEngine`, which keeps up to 64 typed characters and resets on
+Accessibility permission allows; every event passes through unchanged) runs on its own thread
+at the tail of the session taps (`tailAppendEventTap`, so it sees only keys other taps let
+through) and hands each key, with the process it targets (`eventTargetUnixProcessID`), to the
+main thread. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
 navigation keys (arrows, Home, End, Page Up/Down, Tab, Return, Escape, Forward Delete), ⌘ or ⌃
-shortcuts, clicks, app switches and a different frontmost app. Nothing is kept while secure input
-is on, in an app on `ignoreList` or in Stash itself. When the buffer ends with an auto-expanding
-snippet's keyword (the longest wins; case-sensitive), Stash posts one Delete per keyword
-character, puts the text on the clipboard (with Stash's marker and the nspasteboard.org transient
-and concealed types), posts ⌘V, and restores the previous clipboard 0.3 s later (3 s for an
-Electron app) unless something else was copied since. It types the text as key events instead
-when it cannot paste (a private pasteboard, a clipboard over 16 MB, a failed write). Every event
-Stash posts carries `eventSourceUserData` `0x53545348`, which the tap ignores. Without
-Accessibility the tap is retried every 3 s.
+shortcuts, Delete with any modifier, dead keys and the key after one, clicks, app switches and a
+different target app. Nothing is kept while secure input is on, an input method is the selected
+input source, or the target is an app on `ignoreList`, Stash or MacHUD (`com.jrisberg.machud`,
+whose search bar finds snippets by keyword). Keywords match typed ASCII best. When the buffer
+ends with an auto-expanding snippet's keyword (the longest wins; case-sensitive), Stash posts one
+Delete per keyword character, puts the text on the clipboard (with Stash's marker and the
+nspasteboard.org transient and concealed types), posts ⌘V, and restores the previous clipboard
+0.3 s later (3 s for an Electron app) unless something else was copied since. One restore is
+pending at a time: a snippet inserted before the previous one's restore (an expansion or
+`snippets insert`) reuses the clipboard saved for it and replaces its restore. Stash types the
+text as key events instead when it cannot paste (a private pasteboard, a clipboard over 16 MB, a
+failed write). Every event Stash posts carries `eventSourceUserData` `0x53545348`, which the tap
+ignores. Without Accessibility the tap is retried every 3 s.
 
 ## Menu bar consolidation
 

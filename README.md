@@ -72,8 +72,10 @@ and pick it to paste it into the app you are in.
   deletes the keyword, pastes the text and puts your clipboard back. It is off by default: turn
   off Alfred's snippet expansion first, or both expand the same keyword. It needs Accessibility,
   the permission pasting already uses. It never runs in password fields (secure input), in the
-  apps on your ignore list, or in Stash's own windows, and the pasted snippet is never added to
-  your clipboard history.
+  apps on your ignore list, in Stash's own windows or in MacHUD (typing a keyword into its search
+  bar finds the snippet), nor while an input method (Japanese, Chinese, …) is selected. Keywords
+  made of plain letters, digits and punctuation work best: a character typed with a dead key
+  (⌥E then E) is not matched. The pasted snippet is never added to your clipboard history.
 
 ## Latest Clips widget
 

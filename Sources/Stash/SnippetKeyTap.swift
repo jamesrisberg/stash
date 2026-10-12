@@ -9,10 +9,13 @@ import StashKit
 ///
 /// The tap runs on its own thread's run loop and returns each event at once, handing a copy of
 /// what it needs to the main thread, so typing never waits on Stash's main thread. It sits at
-/// the tail of the session taps (`tailAppendEventTap`), so it sees only keys that other taps
-/// let through (MacHUD's radial menu swallows digits). Each key is attributed to the process it
-/// is going to (`eventTargetUnixProcessID`), which also covers non-activating panels such as
-/// MacHUD's search bar and Spotlight that never become the frontmost app.
+/// the tail of the annotated session taps (`cgAnnotatedSessionEventTap`, `tailAppendEventTap`),
+/// where events carry their target application: it sees only keys other taps let through
+/// (MacHUD's radial menu swallows digits) and attributes each to the process it is going to
+/// (`eventTargetUnixProcessID`). That covers non-activating panels such as MacHUD's search bar
+/// and Spotlight, which never become the frontmost app. While one of Stash's own windows has
+/// the keyboard, keys count as typed in Stash. `STASH_LOG_KEY_TARGET=1` logs each key's
+/// resolved target app (never what was typed).
 @MainActor
 final class SnippetKeyTap {
     /// `eventSourceUserData` on every event Stash posts itself ("STSH"), which the tap skips.
@@ -30,8 +33,9 @@ final class SnippetKeyTap {
     private var thread: TapThread?
     private var retry: Timer?
     private var observers: [(NotificationCenter, NSObjectProtocol)] = []
-    private var bundleIDs: [pid_t: String] = [:]
+    private var targets = KeyTargetCache()
     private var inputMethodActive = false
+    private let logsTargets = AppEnvironment.logsKeyTarget
     private(set) var isEnabled = false
 
     var isActive: Bool { thread != nil }
@@ -49,7 +53,7 @@ final class SnippetKeyTap {
                 forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
             ) { [weak self] note in
                 let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
-                MainActor.assumeIsolated { if let pid { self?.bundleIDs[pid] = nil } }
+                MainActor.assumeIsolated { if let pid { self?.targets.forget(pid: pid) } }
             }))
             let distributed = DistributedNotificationCenter.default()
             observers.append((distributed, distributed.addObserver(
@@ -60,7 +64,7 @@ final class SnippetKeyTap {
             uninstall()
             for (center, observer) in observers { center.removeObserver(observer) }
             observers.removeAll()
-            bundleIDs.removeAll()
+            targets.forgetAll()
         }
     }
 
@@ -104,25 +108,13 @@ final class SnippetKeyTap {
         case .reset:
             onReset?()
         case .key(let key, let pid):
-            let target = bundleID(for: pid)
+            let target = targets.bundleID(pid: pid, frontmost: NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
+                                          stashIsKey: NSApp.keyWindow != nil,
+                                          resolve: { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier })
+            if logsTargets { NSLog("Stash: key target pid %d -> %@", pid, target ?? "none") }
             onKey?(key, SnippetExpansionEngine.Context(secureInput: SecureInput.isEnabled, frontmostBundleID: target,
                                                        composing: inputMethodActive))
         }
-    }
-
-    private func bundleID(for pid: pid_t) -> String? {
-        if pid > 0, let known = bundleIDs[pid] { return known }
-        let id = Self.bundleID(forPID: pid, frontmost: NSWorkspace.shared.frontmostApplication?.bundleIdentifier)
-        if pid > 0, pid != getpid(), let id { bundleIDs[pid] = id }
-        return id
-    }
-
-    /// The bundle id of the process a key goes to: Stash for its own windows, the frontmost
-    /// app when the event names no process.
-    static func bundleID(forPID pid: pid_t, frontmost: String?) -> String? {
-        if pid == getpid() { return AppModel.bundleID }
-        guard pid > 0 else { return frontmost }
-        return NSRunningApplication(processIdentifier: pid)?.bundleIdentifier ?? frontmost
     }
 
     /// Whether the selected input source is an input method (Japanese, Chinese, …) rather than
@@ -180,7 +172,7 @@ private final class TapRelay: @unchecked Sendable {
         }
         // A filtering tap (`.defaultTap`) is what Accessibility allows; it never changes or
         // drops an event. A listen-only tap would need the separate Input Monitoring permission.
-        guard let port = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .tailAppendEventTap,
+        guard let port = CGEvent.tapCreate(tap: .cgAnnotatedSessionEventTap, place: .tailAppendEventTap,
                                            options: .defaultTap, eventsOfInterest: mask, callback: callback,
                                            userInfo: Unmanaged.passUnretained(relay).toOpaque()) else { return nil }
         relay.port = port
@@ -245,4 +237,26 @@ private final class TapThread: Thread, @unchecked Sendable {
         }
         if let loop { CFRunLoopStop(loop) }
     }
+}
+
+/// Names the app a key goes to, from its target process: Stash while one of its windows has
+/// the keyboard (the hover panel takes keys without Stash being frontmost), else the target
+/// process's app, else the frontmost app. Only a process that resolves is remembered, so one
+/// that cannot be named yet is looked up again next time.
+@MainActor
+struct KeyTargetCache {
+    private var known: [pid_t: String] = [:]
+
+    mutating func bundleID(pid: pid_t, frontmost: String?, stashIsKey: Bool,
+                           resolve: (pid_t) -> String?) -> String? {
+        if stashIsKey || pid == getpid() { return AppModel.bundleID }
+        guard pid > 0 else { return frontmost }
+        if let id = known[pid] { return id }
+        guard let id = resolve(pid) else { return frontmost }
+        known[pid] = id
+        return id
+    }
+
+    mutating func forget(pid: pid_t) { known[pid] = nil }
+    mutating func forgetAll() { known.removeAll() }
 }

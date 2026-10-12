@@ -256,9 +256,37 @@ final class SnippetsTests: XCTestCase {
     // MARK: - Mapping a key's target process
 
     func testTheTargetProcessNamesTheApp() {
-        XCTAssertEqual(SnippetKeyTap.bundleID(forPID: getpid(), frontmost: "com.example.editor"), AppModel.bundleID)
-        XCTAssertEqual(SnippetKeyTap.bundleID(forPID: 0, frontmost: "com.example.editor"), "com.example.editor",
-                       "no target process: the frontmost app")
+        var cache = KeyTargetCache()
+        let resolve: (pid_t) -> String? = { $0 == 4242 ? "com.example.editor" : nil }
+        XCTAssertEqual(cache.bundleID(pid: getpid(), frontmost: "com.example.other", stashIsKey: false, resolve: resolve),
+                       AppModel.bundleID, "Stash's own process")
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.other", stashIsKey: false, resolve: resolve),
+                       "com.example.editor")
+        XCTAssertEqual(cache.bundleID(pid: 0, frontmost: "com.example.other", stashIsKey: false, resolve: resolve),
+                       "com.example.other", "no target process: the frontmost app")
+    }
+
+    /// Stash's hover panel takes keys without Stash being frontmost or, perhaps, the target.
+    func testAStashKeyWindowMeansStash() {
+        var cache = KeyTargetCache()
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.editor", stashIsKey: true, resolve: { _ in "com.example.editor" }),
+                       AppModel.bundleID)
+    }
+
+    /// Only a resolved process is remembered; the frontmost fallback is not, so a process that
+    /// resolves later is named correctly.
+    func testOnlyResolvedTargetsAreCached() {
+        var cache = KeyTargetCache()
+        var known: String?
+        let resolve: (pid_t) -> String? = { _ in known }
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.front", stashIsKey: false, resolve: resolve), "com.example.front")
+        known = "com.example.panel"
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.front", stashIsKey: false, resolve: resolve), "com.example.panel")
+        known = nil
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.front", stashIsKey: false, resolve: resolve), "com.example.panel",
+                       "a resolved process is remembered")
+        cache.forget(pid: 4242)
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.front", stashIsKey: false, resolve: resolve), "com.example.front")
     }
 
     // MARK: - The system driver's clipboard half (private pasteboard; no key events)

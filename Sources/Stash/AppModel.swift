@@ -210,7 +210,9 @@ final class AppModel: ObservableObject {
     }
 
     /// Runs the click action for the current mouse event.
-    func click(_ clip: Clip, event: NSEvent? = NSApp.currentEvent) {
+    func click(_ clip: Clip) { click(clip, event: NSApp.currentEvent) }
+
+    func click(_ clip: Clip, event: NSEvent?) {
         let mouse = event.flatMap { [.leftMouseUp, .leftMouseDown].contains($0.type) ? $0 : nil }
         switch Self.clickAction(clickCount: mouse?.clickCount ?? 1,
                                 modifiers: mouse?.modifierFlags.intersection(.deviceIndependentFlagsMask) ?? []) {

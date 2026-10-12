@@ -109,8 +109,11 @@ final class SnippetKeyTap {
             onReset?()
         case .keyDown:
             guard event.getIntegerValueField(.eventSourceUserData) != Self.eventTag else { return }
+            // Stash's hover panel takes keys without making Stash the frontmost app: typing into
+            // its search field counts as typing in Stash, where nothing expands.
+            let target = NSApp.keyWindow != nil ? AppModel.bundleID : frontmostBundleID
             onKey?(Self.keyInput(event), SnippetExpansionEngine.Context(secureInput: SecureInput.isEnabled,
-                                                                       frontmostBundleID: frontmostBundleID))
+                                                                       frontmostBundleID: target))
         default:
             break
         }

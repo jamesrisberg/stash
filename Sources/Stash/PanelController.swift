@@ -302,39 +302,8 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Snapshot
 
-    /// Writes a PNG of the panel. The glass blurs what is behind the window, which a view
-    /// cache cannot capture, so the content is composited on a dark stand-in with the
-    /// panel's corners and hairline border (same approach as Sift).
+    /// Writes a PNG of the panel (see `ViewSnapshot`).
     func writeSnapshot(to url: URL) {
-        let view = host
-        let scale = panel.backingScaleFactor
-        let size = view.bounds.size
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale),
-                                         pixelsHigh: Int(size.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
-                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                                         bytesPerRow: 0, bitsPerPixel: 0) else { return }
-        rep.size = size
-        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return }
-        let radius = (mode == .compact ? Self.compactStyle : Self.fullStyle).cornerRadius
-        let rect = CGRect(origin: .zero, size: size)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        NSColor(calibratedWhite: 0.13, alpha: 1).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius).fill()
-        NSGraphicsContext.restoreGraphicsState()
-        view.cacheDisplay(in: view.bounds, to: rep)
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = context
-        NSColor.white.withAlphaComponent(0.22).setStroke()
-        let border = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        border.lineWidth = 1
-        border.stroke()
-        NSGraphicsContext.restoreGraphicsState()
-        do {
-            try rep.representation(using: .png, properties: [:])?.write(to: url)
-            NSLog("Stash: wrote snapshot %@", url.path(percentEncoded: false))
-        } catch {
-            NSLog("Stash: snapshot failed: %@", error.localizedDescription)
-        }
+        ViewSnapshot.write(host, cornerRadius: (mode == .compact ? Self.compactStyle : Self.fullStyle).cornerRadius, to: url)
     }
 }

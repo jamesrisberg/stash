@@ -112,9 +112,10 @@ Expansion, while `snippetExpansion` is on: a session event tap (`.defaultTap`, w
 Accessibility permission allows; every event passes through unchanged) runs on its own thread
 at the tail of the annotated session taps (`cgAnnotatedSessionEventTap`, `tailAppendEventTap`,
 so it sees only keys other taps let through, annotated with their target application) and hands
-each key, with the process it targets (`eventTargetUnixProcessID`), to the main thread. A key
-counts as typed in Stash while one of Stash's windows has the keyboard (the hover panel takes keys
-without Stash being frontmost); with no target process it goes to the frontmost app. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
+each key, with the process it targets (`eventTargetUnixProcessID`), to the main thread. That
+process is trusted whenever the event names one. A key that names none counts as typed in Stash
+while one of Stash's windows has the keyboard (the hover panel takes keys without Stash being
+frontmost), else as typed in the frontmost app. StashKit's `SnippetExpansionEngine` keeps up to 64 typed characters and resets on
 navigation keys (arrows, Home, End, Page Up/Down, Tab, Return, Escape, Forward Delete), ⌘ or ⌃
 shortcuts, Delete with any modifier, dead keys and the key after one, clicks, app switches and a
 different target app. Nothing is kept while secure input is on, an input method is the selected

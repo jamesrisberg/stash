@@ -13,8 +13,8 @@ import StashKit
 /// where events carry their target application: it sees only keys other taps let through
 /// (MacHUD's radial menu swallows digits) and attributes each to the process it is going to
 /// (`eventTargetUnixProcessID`). That covers non-activating panels such as MacHUD's search bar
-/// and Spotlight, which never become the frontmost app. While one of Stash's own windows has
-/// the keyboard, keys count as typed in Stash. `STASH_LOG_KEY_TARGET=1` logs each key's
+/// and Spotlight, which never become the frontmost app. A key that names no target process
+/// counts as typed in Stash while one of Stash's windows has the keyboard. `STASH_LOG_KEY_TARGET=1` logs each key's
 /// resolved target app (never what was typed).
 @MainActor
 final class SnippetKeyTap {
@@ -239,9 +239,10 @@ private final class TapThread: Thread, @unchecked Sendable {
     }
 }
 
-/// Names the app a key goes to, from its target process: Stash while one of its windows has
-/// the keyboard (the hover panel takes keys without Stash being frontmost), else the target
-/// process's app, else the frontmost app. Only a process that resolves is remembered, so one
+/// Names the app a key goes to from its target process, which is trusted whenever the event
+/// names one (Stash's own windows are Stash's process). Without one: Stash while one of its
+/// windows has the keyboard (the hover panel takes keys without Stash being frontmost), else
+/// the frontmost app. Only a process that resolves is remembered, so one
 /// that cannot be named yet is looked up again next time.
 @MainActor
 struct KeyTargetCache {
@@ -249,8 +250,8 @@ struct KeyTargetCache {
 
     mutating func bundleID(pid: pid_t, frontmost: String?, stashIsKey: Bool,
                            resolve: (pid_t) -> String?) -> String? {
-        if stashIsKey || pid == getpid() { return AppModel.bundleID }
-        guard pid > 0 else { return frontmost }
+        if pid == getpid() { return AppModel.bundleID }
+        guard pid > 0 else { return stashIsKey ? AppModel.bundleID : frontmost }
         if let id = known[pid] { return id }
         guard let id = resolve(pid) else { return frontmost }
         known[pid] = id

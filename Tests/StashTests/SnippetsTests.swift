@@ -266,11 +266,18 @@ final class SnippetsTests: XCTestCase {
                        "com.example.other", "no target process: the frontmost app")
     }
 
-    /// Stash's hover panel takes keys without Stash being frontmost or, perhaps, the target.
-    func testAStashKeyWindowMeansStash() {
+    /// A target process above 0 is trusted, even while a Stash window is key (Stash's own
+    /// windows are its own process); with no target process, a Stash key window means Stash
+    /// (the hover panel takes keys without Stash being frontmost).
+    func testAStashKeyWindowDecidesOnlyWithoutATargetProcess() {
         var cache = KeyTargetCache()
-        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.editor", stashIsKey: true, resolve: { _ in "com.example.editor" }),
-                       AppModel.bundleID)
+        XCTAssertEqual(cache.bundleID(pid: 4242, frontmost: "com.example.editor", stashIsKey: true,
+                                      resolve: { _ in "com.example.panel" }),
+                       "com.example.panel", "a known target process wins over Stash's key window")
+        XCTAssertEqual(cache.bundleID(pid: 0, frontmost: "com.example.editor", stashIsKey: true, resolve: { _ in nil }),
+                       AppModel.bundleID, "no target process and a Stash window is key: Stash")
+        XCTAssertEqual(cache.bundleID(pid: 0, frontmost: "com.example.editor", stashIsKey: false, resolve: { _ in nil }),
+                       "com.example.editor", "no target process, no Stash key window: the frontmost app")
     }
 
     /// Only a resolved process is remembered; the frontmost fallback is not, so a process that

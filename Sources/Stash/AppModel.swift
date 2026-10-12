@@ -92,6 +92,9 @@ final class AppModel: ObservableObject {
 
     func start() { watcher.start() }
 
+    /// Whether a simulated ⌘V would paste what Stash wrote (not with a private pasteboard).
+    var canSimulatePaste: Bool { AppEnvironment.pasteboardName == nil && pasteboard == .general }
+
     // MARK: - Lists
 
     var filtered: [Clip] { ClipStore.filter(clips, query: query) }

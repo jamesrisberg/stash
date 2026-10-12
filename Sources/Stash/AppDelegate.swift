@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var control: ControlHost!
     private var widgets: HUDWidgetHost!
+    private var snippets: SnippetsController!
+    private var snippetsWindow: SnippetsWindow?
     static let hotKey = HUDHotKey(key: "v", modifiers: ["control", "option"])
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -38,19 +40,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.pasteHandler = { [weak self] clip in self?.pasteFromPanel(clip) }
         model.modeHandler = { [weak self] compact in self?.panel.setMode(compact ? .compact : .full) }
         model.dismissHandler = { [weak self] in self?.panel.hide() }
+        snippets = SnippetsController(model: model, driver: SystemSnippetDriver(pasteboard: model.pasteboard, watcher: model.watcher))
+        snippets.willPaste = { [weak self] in if self?.panel.isShown == true { self?.panel.hide() } }
+        if demo { DemoSnippets.seed(snippets) }
         control = ControlHost(model: model, panel: panel) { [weak self] clip, _ in
             self?.pasteToFrontmost(clip) ?? ["ok": false, "error": "app gone"]
         }
         // Desktop widgets: set before the socket starts, MacHUD syncs its instances on connect.
         widgets = ClipsWidget.makeHost(model: model, manifest: control.manifest)
         control.router.widgetHost = widgets
+        control.snippets = snippets
         // A snapshot run only draws: no control socket (a running app owns that name), no
         // announcement, no clipboard watcher (it would record into the real history beside the
         // running app), no hotkey, no menu bar item.
-        let snapshotting = value("--snapshot") != nil || value("--snapshot-widgets") != nil
+        let snapshotting = value("--snapshot") != nil || value("--snapshot-widgets") != nil || value("--snapshot-snippets") != nil
         if !snapshotting {
             control.start()
             model.start()
+            snippets.startWatching()
             setupStatusItem()
             // While MacHUD runs, its menu hosts this one and the icon hides (HUDKit menu bar consolidation).
             control.router.menuProvider = { [weak self] in self?.statusItem?.menu }
@@ -73,6 +80,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let dir = value("--snapshot-widgets") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
                 self?.writeWidgetSnapshots(to: URL(filePath: dir))
+                if args.contains("--snapshot-quit") { NSApp.terminate(nil) }
+            }
+        }
+
+        // `--snapshot-snippets <path.png>`: the Snippets window, first snippet selected. Use with `--demo`.
+        if let path = value("--snapshot-snippets") {
+            showSnippets(selecting: snippets.snippets.sorted(by: SnippetSearch.ordered).first?.id)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                self?.snippetsWindow?.writeSnapshot(to: URL(filePath: path))
                 if args.contains("--snapshot-quit") { NSApp.terminate(nil) }
             }
         }
@@ -117,9 +133,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Paste
 
-    /// Whether a simulated ⌘V would paste what Stash wrote (not with a private pasteboard).
-    private var canSimulatePaste: Bool { AppEnvironment.pasteboardName == nil && model.pasteboard == .general }
-
     /// Enter in the panel: copy, then (if enabled and permitted) hide and ⌘V into the app
     /// that was frontmost when the panel opened.
     private func pasteFromPanel(_ clip: Clip) {
@@ -129,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             panel.hide()
             return
         }
-        guard canSimulatePaste else {
+        guard model.canSimulatePaste else {
             model.flash("Copied to the private pasteboard \(model.pasteboard.name.rawValue)")
             return
         }
@@ -147,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func pasteToFrontmost(_ clip: Clip) -> [String: Any] {
         guard model.copy(clip) else { return ["ok": false, "error": "could not copy clip"] }
         var r: [String: Any] = ["ok": true, "copied": true, "title": clip.title]
-        if !canSimulatePaste {
+        if !model.canSimulatePaste {
             r["pasted"] = false
             r["hint"] = "private pasteboard in use; copied only"
         } else if !Paster.isTrusted {
@@ -163,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Status item
 
-    private enum Tag: Int { case compact = 1, pause, accessibility, pasteOnEnter }
+    private enum Tag: Int { case compact = 1, pause, accessibility, pasteOnEnter, snippetExpansion }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -177,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let compact = NSMenuItem(title: "Compact Strip", action: #selector(toggleCompact), keyEquivalent: "")
         compact.tag = Tag.compact.rawValue
         menu.addItem(compact)
+        menu.addItem(NSMenuItem(title: "Snippets…", action: #selector(openSnippets), keyEquivalent: ""))
         menu.addItem(.separator())
         let pause = NSMenuItem(title: "Pause Recording", action: #selector(togglePause), keyEquivalent: "")
         pause.tag = Tag.pause.rawValue
@@ -184,6 +198,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let enter = NSMenuItem(title: "Enter Pastes into Previous App", action: #selector(togglePasteOnEnter), keyEquivalent: "")
         enter.tag = Tag.pasteOnEnter.rawValue
         menu.addItem(enter)
+        let expand = NSMenuItem(title: "Expand Snippet Keywords", action: #selector(toggleSnippetExpansion), keyEquivalent: "")
+        expand.tag = Tag.snippetExpansion.rawValue
+        menu.addItem(expand)
+        menu.addItem(NSMenuItem(title: "Import Snippets from Alfred", action: #selector(importAlfredSnippets), keyEquivalent: ""))
         let ax = NSMenuItem(title: "Grant Accessibility…", action: #selector(grantAccessibility), keyEquivalent: "")
         ax.tag = Tag.accessibility.rawValue
         menu.addItem(ax)
@@ -202,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             case .compact: item.state = panel.mode == .compact ? .on : .off
             case .pause: item.state = model.isPaused ? .on : .off
             case .pasteOnEnter: item.state = model.settings.pasteOnEnter ? .on : .off
+            case .snippetExpansion: item.state = model.settings.snippetExpansion ? .on : .off
             case .accessibility: item.isHidden = Paster.isTrusted
             case nil: break
             }
@@ -220,6 +239,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         s.pasteOnEnter.toggle()
         try? model.updateSettings(s)
     }
+    @objc private func openSnippets() { showSnippets() }
+    @objc private func toggleSnippetExpansion() {
+        do { try snippets.setExpansion(!model.settings.snippetExpansion) } catch {
+            model.flash("Could not save: \(error.localizedDescription)", seconds: 5)
+        }
+    }
+    /// Imports (or re-imports) Alfred's snippets and shows them with the counts.
+    @objc private func importAlfredSnippets() {
+        showSnippets(message: snippets.importFromAlfredMessage())
+    }
+
+    private func showSnippets(selecting id: String? = nil, message: String? = nil) {
+        if snippetsWindow == nil { snippetsWindow = SnippetsWindow(snippets: snippets, model: model) }
+        snippetsWindow?.show(selecting: id, message: message)
+    }
+
     @objc private func grantAccessibility() {
         Paster.requestAccess()
         if !Paster.isTrusted { Paster.openSettings() }

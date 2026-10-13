@@ -6,6 +6,8 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-13
+
 ### Added
 - Snippets: keep reusable text with a name, a keyword and a collection, and manage them in the
   new Snippets window (menu bar icon > Snippets…). `{date}`, `{time}` and `{clipboard}` are filled

@@ -6,6 +6,11 @@ All notable changes to Stash are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-11-14
+
+### Changed
+- Updated shared window handling with HUDKit 0.5.3.
+
 ## [0.4.2] - 2026-11-14
 
 ### Fixed
